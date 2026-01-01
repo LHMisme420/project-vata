@@ -15,7 +15,7 @@ This project provides a reusable "Safety Engine" to detect and seal authentic hu
 
 ## Installation
 ```bash
-git clone https://github.com/yourusername/project-vata.git
+git clone https://github.com/LHMISME420/project-vata.git
 cd project-vata
 python -m venv .venv
 .\.venv\Scripts\activate
