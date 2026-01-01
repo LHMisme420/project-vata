@@ -45,3 +45,30 @@ def fib(n: int) -> int:
     
     print("🛡️ VATA successfully distinguished human soul from AI efficiency!")
     print("    Commit this and post the output on X — this will get attention.")
+import sys
+import os
+
+# Ensure Python looks in the src folder
+sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
+
+import vata
+
+def main():
+    print("\n--- 🛡️ VATA BOOT SEQUENCE 2026 ---")
+    
+    # 1. Run the Security Seal
+    vata.run_safety_check()
+    
+    # 2. Check the Soul Score of THIS file
+    humanity = vata.calculate_soul_score(__file__)
+    
+    print(f"\n[SOUL SCORE]: {humanity}% HUMAN AUTHENTIC")
+    
+    if humanity < 50:
+        print("⚠️ WARNING: LOW SOUL SCORE. POSSIBLE AI INJECTION.")
+    else:
+        print("✅ STATUS: CRAFTY LOGIC VERIFIED.")
+
+if __name__ == "__main__":
+    # TODO: Add the secret prompt sanitizer here later
+    main()
