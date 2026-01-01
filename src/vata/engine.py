@@ -48,3 +48,28 @@ KeyError: 'human_score'
 PS C:\Users\lhmsi\project-vata> python watchdog_guard.py
 C:\Users\lhmsi\AppData\Local\Python\pythoncore-3.14-64\python.exe: can't open file 'C:\\Users\\lhmsi\\project-vata\\watchdog_guard.py': [Errno 2] No such file or directory
 PS C:\Users\lhmsi\project-vata>
+import sys, os
+sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
+import vata
+
+def main():
+    # 1. AUTHENTICATE HUMAN INTENT
+    print("--- 🛡️ VATA HUMAN CHALLENGE ---")
+    passphrase = input("Enter your 'Crafty' secret key: ")
+    
+    if passphrase != "CRAFTY_BULL_SHIT_2026":
+        print("❌ ACCESS DENIED: UNKNOWN ENTITY.")
+        return
+
+    # 2. RUN SAFETY ENGINE
+    print("\n--- INITIATING SYSTEM BOOT ---")
+    stats = vata.get_logic_fingerprint()
+    vata.run_safety_check()
+    
+    # 3. DISPLAY SOUL SCORE
+    humanity = vata.calculate_soul_score(__file__)
+    print(f"\n[SOUL SCORE]: {humanity}%")
+    print("✅ LOGIC VERIFIED. ACCESS GRANTED.")
+
+if __name__ == "__main__":
+    main()
