@@ -1,0 +1,14 @@
+# Python Bytecode
+__pycache__/
+*.py[cod]
+*.class
+
+# Environments
+.venv/
+env/
+venv/
+ENV/
+
+# Project Specific
+ID_LOCK.txt
+*.log

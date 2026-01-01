@@ -1,41 +1,43 @@
-﻿import ast
+import ast
+import os
 import hashlib
-import statistics
 from typing import Dict
 
-def get_logic_fingerprint(code: str) -> Dict:
-    stats = {'human_score': 0, 'details': {}}
+def get_logic_fingerprint(directory: str = ".") -> Dict:
+    """
+    Scans Python files in the directory (excluding vata itself) and builds a simple logic fingerprint
+    based on AST nodes and complexity patterns – humans tend to have more "quirky" structures.
+    """
+    stats = {"nodes": 0, "complexity": 0, "patterns": []}
     
-    # Strong human comment boost
-    comments = [l.lower() for l in code.splitlines() if l.strip().startswith('#')]
-    human_keywords = ['todo', 'slow', 'elegant', 'nostalgic', 'maybe', 'soul', 'hack', 'later', 'damn', 'wtf']
-    human_comments = sum(any(kw in c for kw in human_keywords) for c in comments)
+    for root, _, files in os.walk(directory):
+        for file_name in files:
+            if file_name.endswith(".py") and "vata" not in file_name.lower():
+                file_path = os.path.join(root, file_name)
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        source = f.read()
+                    tree = ast.parse(source)
+                    
+                    for node in ast.walk(tree):
+                        stats["nodes"] += 1
+                        if isinstance(node, (ast.ListComp, ast.DictComp, ast.SetComp,
+                                             ast.GeneratorExp, ast.With, ast.AsyncWith, ast.Lambda)):
+                            stats["complexity"] += 2
+                    
+                    stats["patterns"].append(f"{file_name}: nodes={stats['nodes']}, complexity={stats['complexity']}")
+                except Exception:
+                    # Skip files with syntax errors
+                    continue
     
-    # AI penalty
-    ai_patterns = 0
-    try:
-        tree = ast.parse(code)
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.ListComp, ast.DictComp, ast.Lambda, ast.AnnAssign)):
-                ai_patterns += 1
-        if '@' in code or 'lru_cache' in code:
-            ai_patterns += 2
-    except:
-        pass
-    
-    human_score = 40 + human_comments * 20 - ai_patterns * 10
-    human_score = min(100, max(0, human_score))
-    
-    seal = hashlib.sha256(code.encode()).hexdigest()
-    
-    return {'human_score': human_score, 'seal': seal, 'message': 'HIGHLY HUMAN 🟢' if human_score >= 70 else 'LIKELY AI 🔶'}
+    # Add a hash of the stats for sealing
+    stats["hash"] = hashlib.sha256(str(stats).encode("utf-8")).hexdigest()
+    return stats
 
-def apply_safety_seal(code: str, fp: Dict) -> dict:
-    return {'seal': fp['seal'], 'human_score': fp['human_score']}
+def apply_safety_seal(code_string: str) -> str:
+    """Creates a cryptographic seal (SHA-256 hash) for a piece of code."""
+    return hashlib.sha256(code_string.strip().encode("utf-8")).hexdigest()
 
-def verify_fingerprint(code: str, seal_data: dict) -> tuple[bool, str]:
-    current_seal = hashlib.sha256(code.encode()).hexdigest()
-    if current_seal != seal_data['seal']:
-        return False, 'TAMPERED'
-    score = seal_data['human_score']
-    return True, f'HUMAN CONFIRMED 🟢 (Score: {score})' if score >= 70 else 'AI SUSPECTED 🔶'
+def verify_fingerprint(code_string: str, expected_seal: str) -> bool:
+    """Verifies if the code matches the previously created seal."""
+    return apply_safety_seal(code_string) == expected_seal
