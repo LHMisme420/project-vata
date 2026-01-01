@@ -1,0 +1,26 @@
+[project]
+name = "vata-safety"
+version = "0.1.0"
+description = "2026 AI Safety utility for verifying human-written code via logic fingerprints"
+authors = [{name = "LHMisme420", email = "your@email.com"}]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.9"
+keywords = ["ai-safety", "code-verification", "human-authenticity", "logic-fingerprint"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Security",
+    "Topic :: Software Development :: Quality Assurance"
+]
+
+[project.urls]
+Homepage = "https://github.com/LHMisme420/project-vata"
+Repository = "https://github.com/LHMisme420/project-vata"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
