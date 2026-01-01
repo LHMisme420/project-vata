@@ -72,3 +72,21 @@ def main():
 if __name__ == "__main__":
     # TODO: Add the secret prompt sanitizer here later
     main()
+import sys, os
+sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
+
+import vata
+from vata.visuals import display_dashboard
+
+def main():
+    # 1. Get Logic Data
+    stats = vata.get_logic_fingerprint()
+    soul_score = vata.calculate_soul_score(__file__)
+    seal_art = vata.create_seal(stats)
+    
+    # 2. Run the Visual Dashboard
+    os.system('cls' if os.name == 'nt' else 'clear') # Clear screen for clean look
+    display_dashboard(stats, soul_score, seal_art)
+
+if __name__ == "__main__":
+    main()
