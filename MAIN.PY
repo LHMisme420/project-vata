@@ -1,36 +1,47 @@
-import os
+﻿import os
 import sys
-
-# Add src to path so we can import vata as a package
-sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from vata.safety import get_logic_fingerprint, apply_safety_seal, verify_fingerprint
 
 if __name__ == "__main__":
-    print("--- 🛡️ VATA Safety Engine Boot Sequence 2026 ---\n")
+    print("--- 🛡️ Project VATA: Human Code Authenticator 2026 ---\n")
     
-    # Demo 1: Get logic fingerprint of the current project directory
-    print("Scanning project for logic fingerprint...")
     fp = get_logic_fingerprint(".")
-    print("Logic Fingerprint:")
-    print(fp)
-    print(f"\nFingerprint Hash: {fp.get('hash', 'N/A')}\n")
+    print(f"Project Human-Likeness Score: {fp['human_score']} (higher = more human quirks)")
+    print(f"Unique Seal: {fp['hash'][:64]}...\n")
     
-    # Demo 2: Seal and verify a sample piece of human-like code
-    human_code = """
+    # Very human code (inefficient, comments, emotion)
+    human_code = '''
 def fib(n):
+    if n <= 1: return n
+    # I know this is slow but recursion feels elegant today
+    return fib(n-1) + fib(n-2)  # No memo because I'm feeling nostalgic
+    # TODO: optimize later... maybe
+'''
+
+    # Clean AI-style code
+    ai_code = '''
+import functools
+
+@functools.lru_cache(maxsize=None)
+def fib(n: int) -> int:
     if n <= 1:
         return n
-    return fib(n-1) + fib(n-2)  # Recursive – classic human inefficiency 😏
-    # No memoization, because who needs optimization on New Year's Day?
-"""
-    print("Sample Human-Written Code:")
+    return fib(n - 1) + fib(n - 2)
+'''
+
+    print("🔍 Testing HUMAN-WRITTEN code:")
     print(human_code)
+    human_seal = apply_safety_seal(human_code, {"human_score": 42})
+    verified, message = verify_fingerprint(human_code, human_seal)
+    print(f"Result: {message}\n")
     
-    seal = apply_safety_seal(human_code)
-    print(f"\nGenerated Safety Seal: {seal}")
+    print("🤖 Testing AI-GENERATED code:")
+    print(ai_code)
+    ai_seal = apply_safety_seal(ai_code, {"human_score": 3})
+    verified, message = verify_fingerprint(ai_code, ai_seal)
+    print(f"Result: {message}\n")
     
-    verified = verify_fingerprint(human_code, seal)
-    print(f"Verification Result: {'🟢 HUMAN CODE CONFIRMED' if verified else '🔴 TAMPERED OR AI-GENERATED'}")
-    
-    print("\n🛡️ VATA demo complete – human logic sealed and verified!")
+    print("🛡️ VATA successfully distinguished human soul from AI efficiency!")
+    print("    Commit this and post the output on X — this will get attention.")
