@@ -1,0 +1,11 @@
+project-vata/
+│
+├── .git/                 # Created automatically by 'git init'
+├── .gitignore            # Files Git should ignore (like temporary cache)
+├── README.md             # The "Front Page" of your GitHub repo
+│
+├── vata_safety.py        # THE CORE: Your Safety Seal & Fingerprint logic
+├── main.py               # THE APP: The actual program you are building
+│
+└── utils/                # Optional: Extra tools for your project
+    └── __init__.py
