@@ -1,22 +1,12 @@
 # Project VATA 🛡️
 
-[![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+**2026 AI Safety Utility: Verifying Human-Written Code with Logic Fingerprints & Soul Scoring**
 
-**Project VATA: A 2026 AI Safety utility that uses logic fingerprints to verify human-written code.**
+In an era where AI generates most new code, how do we ensure critical systems contain authentic, human-authored logic — free from hidden AI-induced vulnerabilities?
 
-This project provides a reusable "Safety Engine" to detect and seal authentic human-authored code, protecting against AI-generated vulnerabilities.
+**Project VATA** provides an open-source "Safety Engine" that detects human-written code by analyzing stylistic quirks, emotional comments, intentional inefficiency, and other patterns AI tends to avoid.
 
-## Features
-- Core safety verification logic in `src/vata/safety.py`
-- Reusable as a package: `from vata.safety import verify_fingerprint`
-- Simple CLI/entry point via `main.py`
+It generates cryptographic seals and assigns a **human-likeness score** — because real humans write code with nostalgia, TODOs, and elegant inefficiency.
 
-## Installation
-```bash
-git clone https://github.com/LHMISME420/project-vata.git
-cd project-vata
-python -m venv .venv
-.\.venv\Scripts\activate
-# (Add dependencies later via pyproject.toml)
+## Live Demo Output
+
