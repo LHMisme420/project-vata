@@ -36,3 +36,15 @@ def calculate_soul_score(file_path):
             score += 30
             
     return min(score, 100)
+ + 15ea4d9...45ea5f6 main -> main (forced update)
+PS C:\Users\lhmsi\project-vata> python MAIN.PY
+--- 🛡️ Project VATA: Human Code Authenticator 2026 ---
+
+Traceback (most recent call last):
+  File "C:\Users\lhmsi\project-vata\MAIN.PY", line 11, in <module>
+    print(f"Project Human-Likeness Score: {fp['human_score']} (higher = more human quirks)")
+                                           ~~^^^^^^^^^^^^^^^
+KeyError: 'human_score'
+PS C:\Users\lhmsi\project-vata> python watchdog_guard.py
+C:\Users\lhmsi\AppData\Local\Python\pythoncore-3.14-64\python.exe: can't open file 'C:\\Users\\lhmsi\\project-vata\\watchdog_guard.py': [Errno 2] No such file or directory
+PS C:\Users\lhmsi\project-vata>
