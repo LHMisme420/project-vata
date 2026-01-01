@@ -18,3 +18,22 @@ def main():
 
 if __name__ == "__main__":
     main()
+from src.vata.safety import get_logic_fingerprint, apply_safety_seal, verify_fingerprint
+
+if __name__ == "__main__":
+    print("VATA Safety Engine Boot Sequence 🛡️\n")
+    
+    # Demo fingerprint on current dir
+    fp = get_logic_fingerprint(".")
+    print("Logic Fingerprint:", fp)
+    
+    # Demo sealing code
+    human_code = """
+def fib(n):
+    if n <= 1:
+        return n
+    return fib(n-1) + fib(n-2)  # Recursive, very human-style inefficiency 😉
+"""
+    seal = apply_safety_seal(human_code)
+    print("\nCode Seal:", seal)
+    print("Verified as matching:", verify_fingerprint(human_code, seal))
