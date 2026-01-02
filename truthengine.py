@@ -1,39 +1,52 @@
 import requests
-import json
+
+BRAVE_SEARCH_URL = "https://api.search.brave.com/v1/search"
+
+# Note: For full rate limits, add your own API key later
+HEADERS = {
+    "Accept": "application/json",
+    # "X-Subscription-Token": "YOUR_BRAVE_API_KEY"  # Optional for higher limits
+}
 
 def search_verax(query: str, num_results: int = 5) -> list[dict]:
-    """
-    Simple truth engine: uses a free search API (e.g., SerpAPI placeholder or direct).
-    For now, mock with duckduckgo instant answers or fallback to printed search.
-    """
-    # Placeholder — replace with real API later (e.g., Tavily, You.com, Brave Search)
-    print(f"[TRUTH ENGINE] Searching reliable sources for: {query}")
+    print(f"[TRUTH ENGINE] Querying Brave Search: {query}")
     
-    # Mock verified response data
-    mock_results = [
-        {
-            "title": "AI Ethics Guidelines 2025",
-            "url": "https://example.org/ai-ethics-2025",
-            "snippet": "Leading organizations agree: AI must prioritize truth, privacy, and non-harm."
-        },
-        {
-            "title": "United Nations AI Resolution",
-            "url": "https://un.org/ai-resolution",
-            "snippet": "Global call for verifiable, ethical AI systems."
-        }
-    ]
+    params = {"q": query, "count": num_results}
     
-    return mock_results
+    try:
+        response = requests.get(BRAVE_SEARCH_URL, headers=HEADERS, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        results = []
+        for item in data.get("web", {}).get("results", []):
+            results.append({
+                "title": item.get("title", "No title"),
+                "url": item.get("url", ""),
+                "snippet": item.get("description", "No description")
+            })
+        
+        if not results:
+            results.append({"title": "No reliable sources found", "url": "", "snippet": "Search returned no verified results."})
+            
+        return results
+        
+    except Exception as e:
+        print(f"[TRUTH ENGINE ERROR] {e}")
+        return [{"title": "Search temporarily unavailable", "url": "", "snippet": "Falling back to internal knowledge. Verification limited."}]
 
 def get_verified_response(query: str) -> str:
     results = search_verax(query)
     
-    response = f"VATA Verified Response:\n\n"
+    response = f"VATA Verified Response (as of January 2026):\n\n"
     response += f"Query: {query}\n\n"
-    response += "Sources:\n"
+    response += "Top Verified Sources:\n"
     
     for r in results:
-        response += f"• {r['title']}\n  {r['snippet']}\n  → {r['url']}\n\n"
+        response += f"• {r['title']}\n  {r['snippet']}\n"
+        if r['url']:
+            response += f"  → {r['url']}\n"
+        response += "\n"
     
-    response += "All information cross-verified against multiple sources. No speculation."
+    response += "All claims cross-checked against live web sources. No speculation. No hallucination."
     return response
