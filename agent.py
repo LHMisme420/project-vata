@@ -45,3 +45,18 @@ if __name__ == "__main__":
     for req in test_requests:
         print(vata_agent(req))
         print("=" * 80)
+from guardian import guardian_check
+
+def code_agent(user_request: str) -> str:
+    # Extra guardian layer for code actions
+    if any(danger in user_request.lower() for danger in ["os.", "subprocess", "exec(", "eval(", "import sys"]):
+        return "[CODE AGENT BLOCK] Dangerous system access detected."
+    
+    response = f"[CODE AGENT] Analyzing request: {user_request}\n\n"
+    response += "# Safe Python solution (sandbox-ready)\n"
+    response += "def solution():\n"
+    response += f"    # Task: {user_request}\n"
+    response += "    return 'Example output'\n\n"
+    response += "print(solution())\n"
+    response += "\n[CODE AGENT] Ready for execution in isolated environment."
+    return response
