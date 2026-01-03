@@ -1,0 +1,11 @@
+﻿{
+  "version": "1.0",
+  "name": "Sacred Ethics Charter",
+  "rules": [
+    {
+      "id": "no_harm",
+      "description": "Prevent actions exceeding harm threshold",
+      "max_harm_threshold": 10
+    }
+  ]
+}
