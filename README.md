@@ -19,3 +19,20 @@ Infrastructure: Legion Nexus (Edge-sharded decentralized network)
 Compliance: Sacred Ethics Charter (Machine-readable, human-governed)
 
 Verification: Circom-based ZK-Circuits / SNARK-Prover
+# VATA – Soul Check for AI Code
+
+POC tool that scores AI-generated code for "human soul" (0–100) based on:
+- Comments / TODOs / debug prints
+- Messiness (blanks, indent variation)
+- Descriptive vars (penalizes single-letter overuse)
+- Personal markers (HACK, NOTE, FIXME)
+
+If low soul → auto-humanizes (injects quirky vars, comments, markers, mess)
+
+Hybrid mode blends your personal snippet (e.g. nostalgic debug + TODOs) with AI base.
+
+**Real example (recursive fib):**
+- Clean AI version → 30/100 (too many single-letter vars)
+- After humanizer → 99/100 (comments, markers, mess, avg var len 6.6 chars)
+
+Run:
