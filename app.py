@@ -1,79 +1,120 @@
-import gradio as gr
 import re
 from statistics import variance
 
-def soul_score(code):
-    if not code.strip():
-        return "0/100", "🔶 Likely AI / very clean", "Paste code first"
+def detect_language(code: str) -> str:
+    code_lower = code.lower()
+    if any(kw in code_lower for kw in ['write-host', 'param(', 'gci', 'cp ', '$']):
+        return "powershell"
+    if any(kw in code_lower for kw in ['def ', 'import ', 'print(', 'logger.']):
+        return "python"
+    if any(kw in code_lower for kw in ['console.log', 'function ', 'const ', 'let ', '=>']):
+        return "javascript"
+    return "generic"
 
+def soul_score(code: str) -> dict:
+    if not code.strip():
+        return {"total": 0, "breakdown": {}, "language": "empty"}
+
+    lang = detect_language(code)
     lines = code.splitlines()
     score = 0
-    breakdown = []
+    breakdown = {"Language detected": lang}
 
-    # Comments
-    comments = sum(1 for l in lines if l.strip().startswith('#'))
-    comment_pts = min(comments * 5, 20)
-    score += comment_pts
-    breakdown.append(f"Comments: +{comment_pts}")
+    # Universal signals
+    # Comments (language-agnostic: #, //, /* */)
+    comments = sum(1 for line in lines if re.search(r'^\s*(#|//|/\*)', line.strip()))
+    comment_points = min(comments * 5, 20)
+    score += comment_points
+    breakdown["Comments"] = comment_points
 
-    # Markers
-    markers = len(re.findall(r'(?i)(TODO|FIXME|HACK|NOTE)', code))
-    marker_pts = min(markers * 10, 30)
-    score += marker_pts
-    breakdown.append(f"Markers: +{marker_pts}")
+    # Markers (universal)
+    markers = len(re.findall(r'(?i)\b(TODO|FIXME|HACK|NOTE|BUG|XXX)\b', code))
+    marker_points = min(markers * 10, 30)
+    score += marker_points
+    breakdown["Markers"] = marker_points
 
-    # Debug
-    debug = len(re.findall(r'\b(Write-Host|Write-Debug|Write-Verbose|Write-Warning)\b', code, re.I))
-    debug_pts = min(debug * 5, 10)
-    score += debug_pts
-    breakdown.append(f"Debug output: +{debug_pts}")
+    # Blank lines
+    blanks = sum(1 for line in lines if not line.strip())
+    blank_points = min(blanks * 2, 10)
+    score += blank_points
+    breakdown["Blank lines"] = blank_points
 
-    # Pipes
-    pipes = code.count('|')
-    pipe_pts = min(max(0, pipes - 2) * 2, 15)
-    score += pipe_pts
-    breakdown.append(f"Pipes: +{pipe_pts}")
+    # Indentation variance
+    indents = []
+    for line in lines:
+        stripped = line.lstrip()
+        if stripped and not re.match(r'^\s*(#|//|/\*)', stripped):
+            indents.append(len(line) - len(stripped))
+    indent_points = 0
+    if len(indents) > 3:
+        try:
+            var = variance(indents)
+            indent_points = min(int(var * 4), 15)
+        except:
+            pass
+    score += indent_points
+    breakdown["Indent messiness"] = indent_points
 
-    # Aliases
-    alias_pattern = r'\b(\?|%|sort|select|ft|fl|where|foreach|gci|cp)\b'
-    aliases = len(re.findall(alias_pattern, code, re.I))
-    alias_pts = min(aliases * 3, 12)
-    score += alias_pts
-    breakdown.append(f"Aliases: +{alias_pts}")
+    # Variable name length (generic regex for common langs)
+    var_pattern = r'\b(?:[$@]?[a-zA-Z_][a-zA-Z0-9_]{1,})\b'  # $var, var, @var
+    vars = re.findall(var_pattern, code)
+    var_points = 0
+    if vars:
+        lengths = [len(v) for v in vars if len(v) > 1]
+        if lengths:
+            avg_len = sum(lengths) / len(lengths)
+            var_points = min(int(avg_len * 4), 25)
+    score += var_points
+    breakdown["Var name length"] = var_points
 
-    # Var length
-    vars = re.findall(r'\$[a-zA-Z_][a-zA-Z0-9_]{1,}', code)
-    var_pts = min(int((sum(len(v)-1 for v in vars) / len(vars) * 4) if vars else 0), 25)
-    score += var_pts
-    breakdown.append(f"Var name length: +{var_pts}")
+    # Language-specific flavor
+    if lang == "powershell":
+        pipes = code.count('|')
+        pipe_points = min(max(0, pipes - 2) * 2, 15)
+        score += pipe_points
+        breakdown["Pipes (PS)"] = pipe_points
 
-    # Indent mess
-    indents = [len(l) - len(l.lstrip()) for l in lines if l.strip() and not l.strip().startswith('#')]
-    indent_pts = min(int(variance(indents)*4) if len(indents) > 3 else 0, 15)
-    score += indent_pts
-    breakdown.append(f"Indent messiness: +{indent_pts}")
+        alias_pattern = r'\b(\?|%|sort|select|ft|fl|where|foreach|gci|cp)\b'
+        aliases = len(re.findall(alias_pattern, code, re.I))
+        alias_points = min(aliases * 3, 12)
+        score += alias_points
+        breakdown["Aliases (PS)"] = alias_points
 
-    # Blanks
-    blanks = sum(1 for l in lines if not l.strip())
-    blank_pts = min(blanks * 2, 10)
-    score += blank_pts
-    breakdown.append(f"Blank lines: +{blank_pts}")
+        debug = len(re.findall(r'\b(Write-Host|Write-Debug|Write-Verbose|Write-Warning)\b', code, re.I))
+        debug_points = min(debug * 5, 10)
+        score += debug_points
+        breakdown["Debug output (PS)"] = debug_points
+
+    elif lang == "python":
+        debug = len(re.findall(r'\b(print|logger\.|logging\.|pdb\.|ipdb\.|console\.log)\b', code, re.I))
+        debug_points = min(debug * 5, 10)
+        score += debug_points
+        breakdown["Debug/Logging (Python)"] = debug_points
+
+        # Python comprehensions as "pipe-like" chaining
+        comprehensions = len(re.findall(r'\[.* for .* in .*\]', code))
+        comp_points = min(comprehensions * 3, 12)
+        score += comp_points
+        breakdown["List/set/dict comprehensions"] = comp_points
+
+    elif lang == "javascript":
+        debug = len(re.findall(r'\b(console\.log|console\.debug|debugger)\b', code, re.I))
+        debug_points = min(debug * 5, 10)
+        score += debug_points
+        breakdown["Debug/Console (JS)"] = debug_points
+
+        # Promise chains / array methods as "pipe-like"
+        chains = len(re.findall(r'\.(then|catch|map|filter|forEach|reduce)\b', code, re.I))
+        chain_points = min(chains * 2, 10)
+        score += chain_points
+        breakdown["Promise/Array chaining"] = chain_points
+
+    # Generic debug fallback
+    if "Debug output" not in breakdown and "Debug/Logging" not in breakdown:
+        generic_debug = len(re.findall(r'\b(console\.log|print|log|debug|echo)\b', code, re.I))
+        generic_debug_pts = min(generic_debug * 5, 10)
+        score += generic_debug_pts
+        breakdown["Generic debug"] = generic_debug_pts
 
     total = min(score, 100)
-    verdict = "🟢 Highly human / chaotic" if total >= 80 else "🟢 Definitely human" if total >= 60 else "🟡 Mixed / edited" if total >= 40 else "🔶 Likely AI / very clean"
-
-    return f"{total}/100", verdict, "\n".join(breakdown)
-
-iface = gr.Interface(
-    fn=soul_score,
-    inputs=gr.Textbox(lines=10, placeholder="Paste PowerShell code here..."),
-    outputs=[gr.Textbox(label="Soul Score"), gr.Textbox(label="Verdict"), gr.Textbox(label="Breakdown")],
-    title="Vata Soul Detector PoC",
-    description="Higher score = more human soul (comments, TODOs, debug, pipes/aliases, messiness). Repo: https://github.com/LHMisme420/ProjectVata-PoC",
-    examples=[
-        ["function Backup { param($s, $d) Get-ChildItem $s | Copy-Item -Destination $d }"],
-        ["# TODO: fix mess\n# HACK: lol\ngci . | ? {$_} | % { cp $_ backup/ }\nWrite-Host 'Done? lol'"]
-    ]
-)
-
-iface.launch()
+    return {"total": total, "breakdown": breakdown, "language": lang}
