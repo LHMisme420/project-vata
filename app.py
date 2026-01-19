@@ -22,25 +22,21 @@ def soul_score(code: str) -> dict:
     breakdown = {"Language detected": lang}
 
     # Universal signals
-    # Comments (language-agnostic: #, //, /* */)
     comments = sum(1 for line in lines if re.search(r'^\s*(#|//|/\*)', line.strip()))
     comment_points = min(comments * 5, 20)
     score += comment_points
     breakdown["Comments"] = comment_points
 
-    # Markers (universal)
     markers = len(re.findall(r'(?i)\b(TODO|FIXME|HACK|NOTE|BUG|XXX)\b', code))
     marker_points = min(markers * 10, 30)
     score += marker_points
     breakdown["Markers"] = marker_points
 
-    # Blank lines
     blanks = sum(1 for line in lines if not line.strip())
     blank_points = min(blanks * 2, 10)
     score += blank_points
     breakdown["Blank lines"] = blank_points
 
-    # Indentation variance
     indents = []
     for line in lines:
         stripped = line.lstrip()
@@ -56,8 +52,7 @@ def soul_score(code: str) -> dict:
     score += indent_points
     breakdown["Indent messiness"] = indent_points
 
-    # Variable name length (generic regex for common langs)
-    var_pattern = r'\b(?:[$@]?[a-zA-Z_][a-zA-Z0-9_]{1,})\b'  # $var, var, @var
+    var_pattern = r'\b(?:[$@]?[a-zA-Z_][a-zA-Z0-9_]{1,})\b'
     vars_found = re.findall(var_pattern, code)
     var_points = 0
     if vars_found:
@@ -68,7 +63,6 @@ def soul_score(code: str) -> dict:
     score += var_points
     breakdown["Var name length"] = var_points
 
-    # Language-specific flavor
     debug_points = 0
     if lang == "powershell":
         pipes = code.count('|')
@@ -103,7 +97,6 @@ def soul_score(code: str) -> dict:
         score += chain_points
         breakdown["Promise/Array chaining"] = chain_points
 
-    # Generic debug fallback
     if debug_points == 0:
         generic_debug = len(re.findall(r'\b(console\.log|print|log|debug|echo)\b', code, re.I))
         debug_points = min(generic_debug * 5, 10)
@@ -112,25 +105,43 @@ def soul_score(code: str) -> dict:
     breakdown["Debug/Logging"] = debug_points
 
     total = min(score, 100)
-    return {"total": total, "breakdown": breakdown, "language": lang}
+    return total, lang, breakdown
 
-# Gradio UI
+def format_output(total, lang, breakdown):
+    verdict = (
+        "🟢 Highly human / chaotic" if total >= 80 else
+        "🟢 Definitely human" if total >= 60 else
+        "🟡 Mixed / edited" if total >= 40 else
+        "🔶 Likely AI / very clean"
+    )
+
+    bd_lines = [f"{k}: +{v}" for k, v in breakdown.items() if v > 0 and k != "Language detected"]
+    bd_text = "\n".join(bd_lines) or "No strong signals detected"
+
+    suggestions = []
+    if total < 50:
+        suggestions.append("Add a TODO/FIXME/HACK/NOTE comment")
+    if breakdown.get("Debug/Logging", 0) == 0 and breakdown.get("Debug output (PS)", 0) == 0:
+        suggestions.append("Add a debug print (print, console.log, Write-Host, etc.) with personality")
+    if lang == "powershell" and breakdown.get("Aliases (PS)", 0) < 9:
+        suggestions.append("Use some PowerShell aliases (? % gci cp sort select)")
+    if breakdown.get("Var name length", 0) < 10:
+        suggestions.append("Use longer or quirkier variable names")
+    if not suggestions:
+        suggestions.append("Already very human — add an easter egg comment for fun 😄")
+
+    suggest_text = "\n".join(f"• {s}" for s in suggestions)
+
+    return (
+        f"{total}/100",
+        verdict,
+        bd_text,
+        suggest_text
+    )
+
 demo = gr.Interface(
-    fn=lambda code: (
-        f"{soul_score(code)['total']}/100",
-        "🟢 Highly human / chaotic" if soul_score(code)['total'] >= 80 else 
-        "🟢 Definitely human" if soul_score(code)['total'] >= 60 else 
-        "🟡 Mixed / edited" if soul_score(code)['total'] >= 40 else "🔶 Likely AI / very clean",
-        "\n".join([f"{k}: +{v}" for k, v in soul_score(code)['breakdown'].items() if v > 0]),
-        "It's already pretty human — add a 'hi mom' comment for fun 😄" if soul_score(code)['total'] >= 80 else
-        "\n".join([
-            "Add a TODO or FIXME comment",
-            "Throw in a debug print with personality",
-            "Use aliases/chaining" if "Aliases" in soul_score(code)['breakdown'] and soul_score(code)['breakdown']["Aliases"] < 9 else "",
-            "Make variable names quirkier" if "Var name length" in soul_score(code)['breakdown'] and soul_score(code)['breakdown']["Var name length"] < 10 else ""
-        ]).strip() or "No suggestions — it's soulful!"
-    ),
-    inputs=gr.Textbox(lines=15, placeholder="Paste code (PowerShell, Python, JS, etc.) here..."),
+    fn=format_output,
+    inputs=gr.Textbox(lines=15, placeholder="Paste PowerShell, Python, JS (or other) code here..."),
     outputs=[
         gr.Textbox(label="Soul Score"),
         gr.Textbox(label="Verdict"),
@@ -138,13 +149,12 @@ demo = gr.Interface(
         gr.Textbox(label="Humanization Suggestions")
     ],
     title="Vata Soul Detector PoC",
-    description="Higher score = more human soul (comments, TODOs/FIXME/HACK/NOTE, debug, pipes/aliases/chaining, messiness). Repo: https://github.com/LHMisme420/ProjectVata-PoC",
+    description="Higher score = more human soul (comments, markers, debug, pipes/aliases/chaining, messiness). Repo: https://github.com/LHMisme420/ProjectVata-PoC",
     examples=[
         ["function Backup { param($s, $d) Get-ChildItem $s | Copy-Item -Destination $d }"],
         ["def quicksort(arr): return arr if len(arr) <= 1 else quicksort([x for x in arr if x < arr[0]]) + [arr[0]] + quicksort([x for x in arr if x > arr[0]])"],
         ["console.log('Hello'); const data = items.map(x => x * 2);"]
-    ],
-    allow_flagging="never"
+    ]
 )
 
-demo.launch()
+demo.launch(server_name="0.0.0.0", server_port=7860)
