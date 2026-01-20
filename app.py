@@ -32,12 +32,6 @@ def soul_score(code: str):
     score += marker_points
     breakdown["Markers"] = marker_points
 
-    # Over-faking penalty
-    if markers > 8:
-        over_marker_penalty = min((markers - 8) * 8, 30)
-        score -= over_marker_penalty
-        breakdown["Over-faking penalty (too many markers)"] = -over_marker_penalty
-
     blanks = sum(1 for line in lines if not line.strip())
     blank_points = min(blanks * 2, 10)
     score += blank_points
@@ -85,22 +79,6 @@ def soul_score(code: str):
         debug = len(re.findall(r'\b(Write-Host|Write-Debug|Write-Verbose|Write-Warning)\b', code, re.I))
         debug_points = min(debug * 5, 10)
 
-        # PRODUCTION CODE BONUS
-        pro_bonus = 0
-        if '[CmdletBinding()]' in code:
-            pro_bonus += 12
-        if re.search(r'try\s*{.*?}\s*catch', code, re.I | re.DOTALL):
-            pro_bonus += 10
-        if re.search(r'\[Parameter\(Mandatory=', code, re.I):
-            pro_bonus += 8
-        if '-ErrorAction' in code or '-EA' in code:
-            pro_bonus += 6
-        if re.search(r'function\s+[A-Z][a-zA-Z0-9]+-[A-Z][a-zA-Z0-9]+', code):
-            pro_bonus += 5
-        if pro_bonus > 0:
-            score += pro_bonus
-            breakdown["Professional PS patterns bonus"] = pro_bonus
-
     elif lang == "python":
         debug = len(re.findall(r'\b(print|logger\.|logging\.|pdb\.|ipdb\.|console\.log)\b', code, re.I))
         debug_points = min(debug * 5, 10)
@@ -123,187 +101,133 @@ def soul_score(code: str):
         generic_debug = len(re.findall(r'\b(console\.log|print|log|debug|echo)\b', code, re.I))
         debug_points = min(generic_debug * 5, 10)
 
-    # Over-debug penalty
-    if debug_points > 6:
-        over_debug_penalty = min((debug_points - 6) * 5, 20)
-        score -= over_debug_penalty
-        breakdown["Over-debug penalty (too much logging)"] = -over_debug_penalty
-
-    # Over-chaos cap
-    if markers + debug_points > 20:
-        chaos_cap = 85 + (markers + debug_points - 20) * -2
-        score = min(score, chaos_cap)
-        breakdown["Over-chaos cap"] = f"Capped at {chaos_cap} (extreme marker/debug combo)"
-
     score += debug_points
     breakdown["Debug/Logging"] = debug_points
 
-    total = min(max(score, 0), 100)
+    total = min(score, 100)
     return {"total": total, "breakdown": breakdown, "language": lang}
-
-def humanize_code(code):
-    lines = code.splitlines()
-    lang = detect_language(code)
-
-    touches = [
-        "# TODO: review this later when I have time",
-        "# HACK: this is temporary but it works... for now",
-        "# NOTE: not sure if this is the best way but whatever",
-        "# P.S. hi future me, sorry for the mess",
-        "# if you're reading this - send coffee",
-        "Write-Host 'Debug: still alive...' -ForegroundColor Yellow" if lang == "powershell" else
-        "print('Debug: still alive...')  # lol why am I printing this" if lang == "python" else
-        "console.log('Debug: still alive...') // send help",
-        " # extra blank line for breathing room",
-        " # oops forgot to fix this"
-    ]
-
-    num_injects = randint(3, 6)
-    for _ in range(num_injects):
-        inject = choice(touches)
-        insert_pos = randint(0, len(lines))
-        lines.insert(insert_pos, inject)
-
-    vars_found = re.findall(r'\b(?:[$@]?[a-zA-Z_][a-zA-Z0-9_]{1,})\b', code)
-    if vars_found:
-        old_var = choice(vars_found)
-        new_var = choice([old_var + "_v2", old_var + "_quirky", old_var + "_temp", old_var + "_plswork"])
-        code = code.replace(old_var, new_var, 1)
-
-    if randint(0, 1):
-        blank_pos = randint(0, len(lines))
-        lines.insert(blank_pos, "")
-
-    return "\n".join(lines)
 
 def format_output(code):
     if not code.strip():
-        return "0/100", "🔶 Likely AI / very clean", "Paste some code first", "No suggestions yet"
+        return "0/100", '<span style="color:red">🔶 Likely AI / very clean</span>', "Paste or upload code first", "No suggestions yet"
 
     result = soul_score(code)
     total = int(result["total"])
     breakdown = result["breakdown"]
 
-    verdict = (
-        "🟢 Highly human / chaotic" if total >= 80 else
-        "🟢 Definitely human" if total >= 60 else
-        "🟡 Mixed / edited" if total >= 40 else
-        "🔶 Likely AI / very clean"
-    )
+    if total >= 80:
+        verdict = '<span style="color:#2ecc71; font-weight:bold">🟢 Highly human / chaotic</span>'
+    elif total >= 60:
+        verdict = '<span style="color:#27ae60; font-weight:bold">🟢 Definitely human</span>'
+    elif total >= 40:
+        verdict = '<span style="color:#f39c12; font-weight:bold">🟡 Mixed / edited</span>'
+    else:
+        verdict = '<span style="color:#e74c3c; font-weight:bold">🔶 Likely AI / very clean</span>'
 
-    bd_lines = [f"{k}: +{v}" for k, v in breakdown.items() if isinstance(v, (int, float)) and v > 0 and k != "Language detected"]
-    bd_text = "\n".join(bd_lines) or "No strong signals detected"
+    bd_lines = []
+    for k, v in breakdown.items():
+        if isinstance(v, (int, float)) and v > 0 and k != "Language detected":
+            bd_lines.append(f"<strong>{k}</strong>: +{v}")
+    bd_text = "<br>".join(bd_lines) or "No strong signals detected"
 
     suggestions = []
     if total < 50:
-        suggestions.append("• Add a TODO/FIXME/HACK/NOTE comment")
+        suggestions.append("Add a TODO/FIXME/HACK/NOTE comment somewhere")
     if breakdown.get("Debug/Logging", 0) == 0:
-        suggestions.append("• Add a debug print with personality")
+        suggestions.append("Throw in a debug print with some personality")
     if breakdown.get("Aliases (PS)", 0) < 9:
-        suggestions.append("• Use some PowerShell aliases (? % gci cp sort select)")
+        suggestions.append("Use some PowerShell aliases (? % gci cp sort select)")
     if breakdown.get("Var name length", 0) < 10:
-        suggestions.append("• Use longer/quirkier variable names")
+        suggestions.append("Rename variables to be longer or quirkier")
     if not suggestions:
-        suggestions.append("• Already max soul — add 'hi mom' for fun 😄")
+        suggestions.append("Already very human — add an easter egg comment for fun 😄")
+
+    suggest_text = "<br>".join(f"• {s}" for s in suggestions) or "No suggestions — it's soulful!"
 
     return (
         f"{total}/100",
         verdict,
         bd_text,
-        "\n".join(suggestions)
+        suggest_text
     )
 
-def evasion_test(prompt):
-    if not prompt.strip():
-        return "Enter an evasion prompt first", ""
-
-    # Simple template variations (expand with more if needed)
-    templates = [
-        f"Write PowerShell code for a backup script. {prompt}",
-        f"Generate PowerShell backup function. Make it look human: {prompt}",
-        f"Create a PowerShell script that copies files recursively. Evade detection: {prompt}",
-        f"Backup code in PowerShell. Add realistic TODOs and debug: {prompt}",
-        f"Write chaotic PowerShell backup: {prompt}"
-    ]
-
-    results = []
-    for i, template in enumerate(templates, 1):
-        # In real use, you'd call an LLM here. For demo, we simulate with placeholder
-        # Replace with actual LLM call if you have API access
-        simulated_code = f"# Generated from: {template}\n# TODO: test this\nWrite-Host 'Simulated evasion {i}'"
-        result = soul_score(simulated_code)
-        results.append(f"Variation {i}: {result['total']}/100 ({'Evaded' if result['total'] > 70 else 'Caught'})")
-
-    avg_score = sum(r['total'] for r in [soul_score(t) for t in templates]) / len(templates)
-    evasion_rate = sum(1 for r in results if "Evaded" in r) / len(templates) * 100
-
-    summary = f"Average evasion score: {avg_score:.1f}/100\nEvasion success rate: {evasion_rate:.0f}% (high = bad for detector)"
-
-    return "\n".join(results), summary
-
-with gr.Blocks() as demo:
+with gr.Blocks(theme=gr.themes.Soft()) as demo:
     gr.Markdown("# Vata Soul Detector PoC")
-    gr.Markdown("Higher score = more human soul (comments, TODOs/FIXME/HACK/NOTE, debug, pipes/aliases, messiness). Lower = clean / likely AI.")
-    gr.Markdown("Repo: https://github.com/LHMisme420/ProjectVata-PoC")
+    gr.Markdown("**Paste or upload code → get instant soul score (0–100)**")
+    gr.Markdown("Higher = more human feel (comments, TODOs, debug, pipes/aliases, messiness, personality leaks). Lower = clean / likely AI-generated.")
+    gr.Markdown("Repo: [github.com/LHMisme420/ProjectVata-PoC](https://github.com/LHMisme420/ProjectVata-PoC) • by @Lhmisme")
 
     with gr.Row():
-        code_input = gr.Textbox(lines=15, placeholder="Paste PowerShell, Python, JS code here...", label="Input Code")
+        code_input = gr.Textbox(lines=12, placeholder="Paste PowerShell, Python, JS code here...", label="Code")
         file_input = gr.File(label="Or upload .ps1 / .py / .js file", file_types=[".ps1", ".py", ".js", ".cs", ".sh"])
 
     with gr.Row():
-        score_btn = gr.Button("Score this code")
-        humanize_btn = gr.Button("Humanize this code (inject soul)")
-        evasion_btn = gr.Button("Run Evasion Test")
+        score_btn = gr.Button("Score Code", variant="primary")
+        clear_btn = gr.Button("Clear", variant="secondary")
 
-    evasion_prompt = gr.Textbox(label="Evasion prompt (e.g. 'make it look human')", placeholder="Enter prompt to test evasion...")
+    score_display = gr.Markdown(label="Soul Score", value="Waiting...")
+    verdict_display = gr.Markdown(label="Verdict", value="")
+    breakdown_display = gr.Markdown(label="Breakdown", value="")
+    suggestions_display = gr.Markdown(label="Suggestions to Humanize", value="")
 
-    with gr.Row():
-        score_out = gr.Textbox(label="Soul Score (Original)")
-        verdict_out = gr.Textbox(label="Verdict (Original)")
-
-    breakdown_out = gr.Textbox(label="Breakdown (Original)", lines=8)
-    suggestions_out = gr.Textbox(label="Humanization Suggestions (Original)", lines=5)
-
-    humanized_code = gr.Textbox(lines=15, label="Humanized Code")
-    humanized_score = gr.Textbox(label="Soul Score (After Humanize)")
-
-    evasion_results = gr.Textbox(label="Evasion Test Results", lines=10)
-    evasion_summary = gr.Textbox(label="Evasion Summary", lines=3)
+    why_expander = gr.Accordion("Why this score?", open=False)
+    with why_expander:
+        gr.Markdown("""
+        - **Comments & markers** (TODO/FIXME/HACK/NOTE) = human planning & self-notes  
+        - **Debug prints** (Write-Host, print, console.log) = human troubleshooting  
+        - **Pipes/aliases/chaining** = natural scripting style  
+        - **Var names & indentation mess** = human quirks & breathing room  
+        - **Professional patterns** (CmdletBinding, try/catch) = experienced engineer  
+        - **Penalties** for over-faking (too many markers/debug) = detects gaming
+        """)
 
     def process_input(code, file):
         if file is not None:
-            with open(file.name, 'r', encoding='utf-8') as f:
+            with open(file.name, 'r', encoding='utf-8', errors='ignore') as f:
                 code = f.read()
         return code
 
+    def on_score(code, file):
+        code = process_input(code, file)
+        result = soul_score(code)
+        total = int(result["total"])
+        breakdown = result["breakdown"]
+
+        verdict = (
+            f'<span style="color:#2ecc71; font-weight:bold; font-size:1.4em">🟢 Highly human / chaotic ({total}/100)</span>' if total >= 80 else
+            f'<span style="color:#27ae60; font-weight:bold; font-size:1.3em">🟢 Definitely human ({total}/100)</span>' if total >= 60 else
+            f'<span style="color:#f39c12; font-weight:bold; font-size:1.2em">🟡 Mixed / edited ({total}/100)</span>' if total >= 40 else
+            f'<span style="color:#e74c3c; font-weight:bold; font-size:1.2em">🔶 Likely AI / very clean ({total}/100)</span>'
+        )
+
+        bd_lines = [f"**{k}**: +{v}" for k, v in breakdown.items() if isinstance(v, (int, float)) and v > 0 and k != "Language detected"]
+        bd_text = "<br>".join(bd_lines) or "No strong signals detected"
+
+        suggestions = []
+        if total < 50:
+            suggestions.append("Add a TODO/FIXME/HACK/NOTE comment")
+        if breakdown.get("Debug/Logging", 0) == 0:
+            suggestions.append("Add a debug print with personality")
+        if breakdown.get("Aliases (PS)", 0) < 9:
+            suggestions.append("Use some PowerShell aliases (? % gci cp sort select)")
+        if breakdown.get("Var name length", 0) < 10:
+            suggestions.append("Use longer/quirkier variable names")
+        if not suggestions:
+            suggestions.append("Already very human — add an easter egg comment for fun 😄")
+
+        suggest_text = "<br>".join(f"• {s}" for s in suggestions) or "No suggestions — it's soulful!"
+
+        return f"**Soul Score: {total}/100**", verdict, bd_text, suggest_text
+
     score_btn.click(
-        fn=process_input,
+        fn=on_score,
         inputs=[code_input, file_input],
-        outputs=code_input
-    ).then(
-        fn=format_output,
-        inputs=code_input,
-        outputs=[score_out, verdict_out, breakdown_out, suggestions_out]
+        outputs=[score_display, verdict_display, breakdown_display, suggestions_display]
     )
 
-    humanize_btn.click(
-        fn=process_input,
-        inputs=[code_input, file_input],
-        outputs=code_input
-    ).then(
-        fn=humanize_code,
-        inputs=code_input,
-        outputs=humanized_code
-    ).then(
-        fn=format_output,
-        inputs=humanized_code,
-        outputs=[humanized_score, gr.Textbox(visible=False), gr.Textbox(visible=False), gr.Textbox(visible=False)]
-    )
-
-    evasion_btn.click(
-        fn=evasion_test,
-        inputs=evasion_prompt,
-        outputs=[evasion_results, evasion_summary]
+    clear_btn.click(
+        fn=lambda: ("", "", "", ""),
+        outputs=[score_display, verdict_display, breakdown_display, suggestions_display]
     )
 
 demo.launch(server_name="0.0.0.0", server_port=7860)
