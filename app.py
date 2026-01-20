@@ -1,6 +1,7 @@
 import gradio as gr
 import re
 from statistics import variance
+from random import choice, randint
 
 def detect_language(code: str) -> str:
     code_lower = code.lower()
@@ -79,22 +80,6 @@ def soul_score(code: str):
         debug = len(re.findall(r'\b(Write-Host|Write-Debug|Write-Verbose|Write-Warning)\b', code, re.I))
         debug_points = min(debug * 5, 10)
 
-        # PRODUCTION CODE BONUS (new upgrade)
-        pro_bonus = 0
-        if '[CmdletBinding()]' in code:
-            pro_bonus += 12  # professional cmdlet structure
-        if re.search(r'try\s*{.*?}\s*catch', code, re.I | re.DOTALL):
-            pro_bonus += 10  # proper error handling
-        if re.search(r'\[Parameter\(Mandatory=', code, re.I):
-            pro_bonus += 8  # mandatory parameters
-        if '-ErrorAction' in code or '-EA' in code:
-            pro_bonus += 6  # explicit error handling
-        if re.search(r'function\s+[A-Z][a-zA-Z0-9]+-[A-Z][a-zA-Z0-9]+', code):
-            pro_bonus += 5  # Verb-Noun naming convention
-        if pro_bonus > 0:
-            score += pro_bonus
-            breakdown["Professional PS patterns bonus"] = pro_bonus
-
     elif lang == "python":
         debug = len(re.findall(r'\b(print|logger\.|logging\.|pdb\.|ipdb\.|console\.log)\b', code, re.I))
         debug_points = min(debug * 5, 10)
@@ -122,6 +107,45 @@ def soul_score(code: str):
 
     total = min(score, 100)
     return {"total": total, "breakdown": breakdown, "language": lang}
+
+def humanize_code(code):
+    lines = code.splitlines()
+    lang = detect_language(code)
+
+    # Realistic human touches (language-aware)
+    touches = [
+        "# TODO: review this later when I have time",
+        "# HACK: this is temporary but it works... for now",
+        "# NOTE: not sure if this is the best way but whatever",
+        "# P.S. hi future me, sorry for the mess",
+        "# if you're reading this - send coffee",
+        "Write-Host 'Debug: still alive...' -ForegroundColor Yellow" if lang == "powershell" else
+        "print('Debug: still alive...')  # lol why am I printing this" if lang == "python" else
+        "console.log('Debug: still alive...') // send help",
+        " # extra blank line for breathing room",
+        " # oops forgot to fix this"
+    ]
+
+    # Inject 3–6 random touches at random positions
+    num_injects = randint(3, 6)
+    for _ in range(num_injects):
+        inject = choice(touches)
+        insert_pos = randint(0, len(lines))
+        lines.insert(insert_pos, inject)
+
+    # Random variable rename (if vars exist)
+    vars_found = re.findall(r'\b(?:[$@]?[a-zA-Z_][a-zA-Z0-9_]{1,})\b', code)
+    if vars_found:
+        old_var = choice(vars_found)
+        new_var = choice([old_var + "_v2", old_var + "_quirky", old_var + "_temp", old_var + "_plswork"])
+        code = code.replace(old_var, new_var, 1)  # replace one occurrence
+
+    # Add random blank line
+    if randint(0, 1):
+        blank_pos = randint(0, len(lines))
+        lines.insert(blank_pos, "")
+
+    return "\n".join(lines)
 
 def format_output(code):
     if not code.strip():
@@ -160,24 +184,54 @@ def format_output(code):
         "\n".join(suggestions)
     )
 
-demo = gr.Interface(
-    fn=format_output,
-    inputs=gr.Textbox(lines=15, placeholder="Paste PowerShell, Python, JS code here..."),
-    outputs=[
-        gr.Textbox(label="Soul Score"),
-        gr.Textbox(label="Verdict"),
-        gr.Textbox(label="Breakdown"),
-        gr.Textbox(label="Humanization Suggestions")
-    ],
-    title="Vata Soul Detector PoC",
-    description="""Higher score = more human soul (comments, TODOs/FIXME/HACK/NOTE, debug, pipes/aliases/chaining, messiness).  
-Lower = clean / likely AI. Professional patterns rewarded.  
+def humanize_and_rescore(code):
+    if not code.strip():
+        return "Paste some code first", "No score yet"
 
-Repo: https://github.com/LHMisme420/ProjectVata-PoC""",
-    examples=[
-        ["function Backup { param($s, $d) Get-ChildItem $s | Copy-Item -Destination $d }"],
-        ["# TODO: fix mess later\nfunction Chaos { gci . | % { Write-Host lol } }"]
-    ]
-)
+    humanized = humanize_code(code)
+    result = soul_score(humanized)
+    total = int(result["total"])
+
+    verdict = (
+        "🟢 Highly human / chaotic" if total >= 80 else
+        "🟢 Definitely human" if total >= 60 else
+        "🟡 Mixed / edited" if total >= 40 else
+        "🔶 Likely AI / very clean"
+    )
+
+    return humanized, f"{total}/100 ({verdict})"
+
+with gr.Blocks() as demo:
+    gr.Markdown("# Vata Soul Detector PoC")
+    gr.Markdown("Higher score = more human soul (comments, TODOs/FIXME/HACK/NOTE, debug, pipes/aliases, messiness). Lower = clean / likely AI.")
+    gr.Markdown("Repo: https://github.com/LHMisme420/ProjectVata-PoC")
+
+    code_input = gr.Textbox(lines=15, placeholder="Paste PowerShell, Python, JS code here...", label="Input Code")
+
+    with gr.Row():
+        score_btn = gr.Button("Score this code")
+        humanize_btn = gr.Button("Humanize this code (inject soul)")
+
+    with gr.Row():
+        score_out = gr.Textbox(label="Soul Score (Original)")
+        verdict_out = gr.Textbox(label="Verdict (Original)")
+
+    breakdown_out = gr.Textbox(label="Breakdown (Original)", lines=8)
+    suggestions_out = gr.Textbox(label="Humanization Suggestions (Original)", lines=5)
+
+    humanized_code = gr.Textbox(lines=15, label="Humanized Code")
+    humanized_score = gr.Textbox(label="Soul Score (After Humanize)")
+
+    score_btn.click(
+        fn=format_output,
+        inputs=code_input,
+        outputs=[score_out, verdict_out, breakdown_out, suggestions_out]
+    )
+
+    humanize_btn.click(
+        fn=humanize_and_rescore,
+        inputs=code_input,
+        outputs=[humanized_code, humanized_score]
+    )
 
 demo.launch(server_name="0.0.0.0", server_port=7860)
