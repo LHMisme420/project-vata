@@ -157,3 +157,5 @@ demo = gr.Interface(
 )
 
 demo.launch(server_name="0.0.0.0", server_port=7860)
+st.markdown("**Paste code → get soul score (0–100).** Higher = more human (comments, TODOs, debug, pipes/aliases, messiness). Lower = clean / likely AI.")
+st.caption("Project Vata PoC — https://github.com/LHMisme420/ProjectVata-PoC")
