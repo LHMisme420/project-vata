@@ -1,3 +1,5 @@
+import gradio as gr
+
 def format_output(code):
     result = soul_score(code)
     total = int(result["total"])  # force to int here
