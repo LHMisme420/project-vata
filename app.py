@@ -32,12 +32,6 @@ def soul_score(code: str):
     score += marker_points
     breakdown["Markers"] = marker_points
 
-    # NEGATION: Over-faking penalty (from previous upgrade)
-    if markers > 8:
-        over_marker_penalty = min((markers - 8) * 8, 30)
-        score -= over_marker_penalty
-        breakdown["Over-faking penalty (too many markers)"] = -over_marker_penalty
-
     blanks = sum(1 for line in lines if not line.strip())
     blank_points = min(blanks * 2, 10)
     score += blank_points
