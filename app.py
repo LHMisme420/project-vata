@@ -139,7 +139,7 @@ def format_output(code):
         "🔶 Likely AI / very clean"
     )
 
-    bd_lines = [f"{k}: +{v}" for k, v in breakdown.items() if isinstance(v, (int, float)) and v > 0 and k != "Language detected"]
+    bd_lines = [f"{k}: +{v}" if v > 0 else f"{k}: {v}" for k, v in breakdown.items() if k != "Language detected"]
     bd_text = "\n".join(bd_lines) or "No strong signals detected"
 
     suggestions = []
@@ -152,7 +152,7 @@ def format_output(code):
     if breakdown.get("Var name length", 0) < 10:
         suggestions.append("• Use longer/quirkier variable names")
     if not suggestions:
-        suggestions.append("• Already max soul — add 'hi mom' for fun 😄")
+        suggestions.append("• Already strong human signal — keep it messy 😄")
 
     return (
         f"{total}/100",
