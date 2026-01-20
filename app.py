@@ -32,12 +32,6 @@ def soul_score(code: str):
     score += marker_points
     breakdown["Markers"] = marker_points
 
-    # NEGATION: Over-faking penalty (too many markers = suspicious)
-    if markers > 8:
-        overfake_penalty = min((markers - 8) * 8, 30)
-        score -= overfake_penalty
-        breakdown["Over-faking penalty (too many markers)"] = -overfake_penalty
-
     blanks = sum(1 for line in lines if not line.strip())
     blank_points = min(blanks * 2, 10)
     score += blank_points
@@ -51,7 +45,8 @@ def soul_score(code: str):
     indent_points = 0
     if len(indents) > 3:
         try:
-            indent_points = min(int(variance(indents) * 4), 15)
+            var = variance(indents)
+            indent_points = min(int(var * 4), 15)
         except:
             pass
     score += indent_points
@@ -84,20 +79,6 @@ def soul_score(code: str):
         debug = len(re.findall(r'\b(Write-Host|Write-Debug|Write-Verbose|Write-Warning)\b', code, re.I))
         debug_points = min(debug * 5, 10)
 
-        # PRODUCTION CODE BONUS (PowerShell)
-        pro_bonus = 0
-        if '[CmdletBinding()]' in code:
-            pro_bonus += 10
-        if re.search(r'try\s*{.*?}\s*catch', code, re.I | re.DOTALL):
-            pro_bonus += 10
-        if re.search(r'\[Parameter\(Mandatory\]', code):
-            pro_bonus += 8
-        if '-ErrorAction' in code:
-            pro_bonus += 5
-        if pro_bonus > 0:
-            score += pro_bonus
-            breakdown["Professional PS patterns"] = pro_bonus
-
     elif lang == "python":
         debug = len(re.findall(r'\b(print|logger\.|logging\.|pdb\.|ipdb\.|console\.log)\b', code, re.I))
         debug_points = min(debug * 5, 10)
@@ -120,21 +101,15 @@ def soul_score(code: str):
         generic_debug = len(re.findall(r'\b(console\.log|print|log|debug|echo)\b', code, re.I))
         debug_points = min(generic_debug * 5, 10)
 
-    # NEGATION: Too much debug = suspicious
-    if debug_points >= 10:  # maxed out
-        overdebug_penalty = min((debug_points - 8) * 5, 15)
-        score -= overdebug_penalty
-        breakdown["Over-debug penalty"] = -overdebug_penalty
-
     score += debug_points
     breakdown["Debug/Logging"] = debug_points
 
-    total = min(max(score, 0), 100)  # clamp to 0–100
+    total = min(score, 100)
     return {"total": total, "breakdown": breakdown, "language": lang}
 
 def format_output(code):
     result = soul_score(code)
-    total = result["total"]
+    total = int(result["total"])
     breakdown = result["breakdown"]
 
     verdict = (
@@ -144,20 +119,20 @@ def format_output(code):
         "🔶 Likely AI / very clean"
     )
 
-    bd_lines = [f"{k}: +{v}" if v > 0 else f"{k}: {v}" for k, v in breakdown.items() if k != "Language detected"]
-    bd_text = "\n".join(bd_lines) or "No signals detected"
+    bd_lines = [f"{k}: +{v}" for k, v in breakdown.items() if isinstance(v, (int, float)) and v > 0 and k != "Language detected"]
+    bd_text = "\n".join(bd_lines) or "No strong signals detected"
 
     suggestions = []
-    if total < 60:
-        suggestions.append("• Add some TODO/FIXME comments")
+    if total < 50:
+        suggestions.append("• Add a TODO/FIXME/HACK/NOTE comment")
     if breakdown.get("Debug/Logging", 0) == 0:
         suggestions.append("• Add a debug print with personality")
-    if breakdown.get("Aliases (PS)", 0) < 6:
-        suggestions.append("• Use PowerShell aliases (? % gci cp)")
+    if breakdown.get("Aliases (PS)", 0) < 9:
+        suggestions.append("• Use some PowerShell aliases (? % gci cp sort select)")
     if breakdown.get("Var name length", 0) < 10:
         suggestions.append("• Use longer/quirkier variable names")
     if not suggestions:
-        suggestions.append("• Already strong human signal — keep it messy 😄")
+        suggestions.append("• Already max soul — add 'hi mom' for fun 😄")
 
     return (
         f"{total}/100",
@@ -176,8 +151,9 @@ demo = gr.Interface(
         gr.Textbox(label="Humanization Suggestions")
     ],
     title="Vata Soul Detector PoC",
-    description="""Higher score = more human soul (comments, TODOs, debug, pipes/aliases, messiness).  
-Professional patterns now rewarded. Over-faking penalized.  
+    description="""Higher score = more human soul (comments, TODOs/FIXME/HACK/NOTE, debug, pipes/aliases/chaining, messiness).  
+Lower = clean / likely AI.  
+
 Repo: https://github.com/LHMisme420/ProjectVata-PoC""",
     examples=[
         ["function Backup { param($s, $d) Get-ChildItem $s | Copy-Item -Destination $d }"],
