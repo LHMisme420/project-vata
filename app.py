@@ -21,6 +21,7 @@ def soul_score(code: str):
     score = 0
     breakdown = {"Language detected": lang}
 
+    # Universal signals
     comments = sum(1 for line in lines if re.search(r'^\s*(#|//|/\*)', line.strip()))
     comment_points = min(comments * 5, 20)
     score += comment_points
@@ -106,6 +107,9 @@ def soul_score(code: str):
     return {"total": total, "breakdown": breakdown, "language": lang}
 
 def format_output(code):
+    if not code.strip():
+        return "0/100", "🔶 Likely AI / very clean", "Paste some code first", "No suggestions yet"
+
     result = soul_score(code)
     total = int(result["total"])
     breakdown = result["breakdown"]
@@ -117,20 +121,23 @@ def format_output(code):
         "🔶 Likely AI / very clean"
     )
 
-    bd_lines = [f"{k}: +{v}" for k, v in breakdown.items() if isinstance(v, (int, float)) and v > 0 and k != "Language detected"]
+    bd_lines = []
+    for k, v in breakdown.items():
+        if isinstance(v, (int, float)) and v > 0 and k != "Language detected":
+            bd_lines.append(f"**{k}**: +{v}")
     bd_text = "\n".join(bd_lines) or "No strong signals detected"
 
     suggestions = []
     if total < 50:
         suggestions.append("• Add a TODO/FIXME/HACK/NOTE comment")
     if breakdown.get("Debug/Logging", 0) == 0:
-        suggestions.append("• Add a debug print with personality")
+        suggestions.append("• Add a debug print with personality (print, console.log, Write-Host, etc.)")
     if breakdown.get("Aliases (PS)", 0) < 9:
-        suggestions.append("• Use PowerShell aliases (? % gci cp etc.)")
+        suggestions.append("• Use some PowerShell aliases (? % gci cp sort select)")
     if breakdown.get("Var name length", 0) < 10:
-        suggestions.append("• Use longer/quirkier variable names")
+        suggestions.append("• Use longer or quirkier variable names")
     if not suggestions:
-        suggestions.append("• Already max soul — add 'hi mom' for fun 😄")
+        suggestions.append("• Already very human — add an easter egg comment for fun 😄")
 
     return (
         f"{total}/100",
@@ -141,7 +148,7 @@ def format_output(code):
 
 demo = gr.Interface(
     fn=format_output,
-    inputs=gr.Textbox(lines=15, placeholder="Paste PowerShell, Python, JS code here..."),
+    inputs=gr.Textbox(lines=15, placeholder="Paste PowerShell, Python, JS (or other) code here..."),
     outputs=[
         gr.Textbox(label="Soul Score"),
         gr.Textbox(label="Verdict"),
@@ -149,7 +156,7 @@ demo = gr.Interface(
         gr.Textbox(label="Humanization Suggestions")
     ],
     title="Vata Soul Detector PoC",
-    description="Higher score = more human soul. Repo: https://github.com/LHMisme420/ProjectVata-PoC",
+    description="Higher score = more human soul (comments, TODOs/FIXME/HACK/NOTE, debug, pipes/aliases/chaining, messiness). Repo: https://github.com/LHMisme420/ProjectVata-PoC",
     examples=[
         ["function Backup { param($s, $d) Get-ChildItem $s | Copy-Item -Destination $d }"],
         ["# TODO: fix mess later\nfunction Chaos { gci . | % { Write-Host lol } }"]
@@ -157,5 +164,3 @@ demo = gr.Interface(
 )
 
 demo.launch(server_name="0.0.0.0", server_port=7860)
-st.markdown("**Paste code → get soul score (0–100).** Higher = more human (comments, TODOs, debug, pipes/aliases, messiness). Lower = clean / likely AI.")
-st.caption("Project Vata PoC — https://github.com/LHMisme420/ProjectVata-PoC")
