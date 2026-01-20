@@ -107,7 +107,7 @@ def soul_score(code: str):
 
 def format_output(code):
     result = soul_score(code)
-    total = result["total"]
+    total = int(result["total"])  # force int
     breakdown = result["breakdown"]
 
     verdict = (
@@ -117,7 +117,7 @@ def format_output(code):
         "🔶 Likely AI / very clean"
     )
 
-    bd_lines = [f"{k}: +{v}" for k, v in breakdown.items() if v > 0 and k != "Language detected"]
+    bd_lines = [f"{k}: +{v}" for k, v in breakdown.items() if isinstance(v, (int, float)) and v > 0 and k != "Language detected"]
     bd_text = "\n".join(bd_lines) or "No strong signals detected"
 
     suggestions = []
