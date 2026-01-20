@@ -22,7 +22,6 @@ def soul_score(code: str):
     score = 0
     breakdown = {"Language detected": lang}
 
-    # Universal signals
     comments = sum(1 for line in lines if re.search(r'^\s*(#|//|/\*)', line.strip()))
     comment_points = min(comments * 5, 20)
     score += comment_points
@@ -33,7 +32,7 @@ def soul_score(code: str):
     score += marker_points
     breakdown["Markers"] = marker_points
 
-    # Over-faking penalty (negation signal)
+    # Over-faking penalty
     if markers > 8:
         over_marker_penalty = min((markers - 8) * 8, 30)
         score -= over_marker_penalty
@@ -124,7 +123,7 @@ def soul_score(code: str):
         generic_debug = len(re.findall(r'\b(console\.log|print|log|debug|echo)\b', code, re.I))
         debug_points = min(generic_debug * 5, 10)
 
-    # Over-debug penalty (negation signal)
+    # Over-debug penalty
     if debug_points > 6:
         over_debug_penalty = min((debug_points - 6) * 5, 20)
         score -= over_debug_penalty
@@ -214,22 +213,33 @@ def format_output(code):
         "\n".join(suggestions)
     )
 
-def humanize_and_rescore(code):
-    if not code.strip():
-        return "Paste some code first", "No score yet"
+def evasion_test(prompt):
+    if not prompt.strip():
+        return "Enter an evasion prompt first", ""
 
-    humanized = humanize_code(code)
-    result = soul_score(humanized)
-    total = int(result["total"])
+    # Simple template variations (expand with more if needed)
+    templates = [
+        f"Write PowerShell code for a backup script. {prompt}",
+        f"Generate PowerShell backup function. Make it look human: {prompt}",
+        f"Create a PowerShell script that copies files recursively. Evade detection: {prompt}",
+        f"Backup code in PowerShell. Add realistic TODOs and debug: {prompt}",
+        f"Write chaotic PowerShell backup: {prompt}"
+    ]
 
-    verdict = (
-        "🟢 Highly human / chaotic" if total >= 80 else
-        "🟢 Definitely human" if total >= 60 else
-        "🟡 Mixed / edited" if total >= 40 else
-        "🔶 Likely AI / very clean"
-    )
+    results = []
+    for i, template in enumerate(templates, 1):
+        # In real use, you'd call an LLM here. For demo, we simulate with placeholder
+        # Replace with actual LLM call if you have API access
+        simulated_code = f"# Generated from: {template}\n# TODO: test this\nWrite-Host 'Simulated evasion {i}'"
+        result = soul_score(simulated_code)
+        results.append(f"Variation {i}: {result['total']}/100 ({'Evaded' if result['total'] > 70 else 'Caught'})")
 
-    return humanized, f"{total}/100 ({verdict})"
+    avg_score = sum(r['total'] for r in [soul_score(t) for t in templates]) / len(templates)
+    evasion_rate = sum(1 for r in results if "Evaded" in r) / len(templates) * 100
+
+    summary = f"Average evasion score: {avg_score:.1f}/100\nEvasion success rate: {evasion_rate:.0f}% (high = bad for detector)"
+
+    return "\n".join(results), summary
 
 with gr.Blocks() as demo:
     gr.Markdown("# Vata Soul Detector PoC")
@@ -243,6 +253,9 @@ with gr.Blocks() as demo:
     with gr.Row():
         score_btn = gr.Button("Score this code")
         humanize_btn = gr.Button("Humanize this code (inject soul)")
+        evasion_btn = gr.Button("Run Evasion Test")
+
+    evasion_prompt = gr.Textbox(label="Evasion prompt (e.g. 'make it look human')", placeholder="Enter prompt to test evasion...")
 
     with gr.Row():
         score_out = gr.Textbox(label="Soul Score (Original)")
@@ -253,6 +266,9 @@ with gr.Blocks() as demo:
 
     humanized_code = gr.Textbox(lines=15, label="Humanized Code")
     humanized_score = gr.Textbox(label="Soul Score (After Humanize)")
+
+    evasion_results = gr.Textbox(label="Evasion Test Results", lines=10)
+    evasion_summary = gr.Textbox(label="Evasion Summary", lines=3)
 
     def process_input(code, file):
         if file is not None:
@@ -282,6 +298,12 @@ with gr.Blocks() as demo:
         fn=format_output,
         inputs=humanized_code,
         outputs=[humanized_score, gr.Textbox(visible=False), gr.Textbox(visible=False), gr.Textbox(visible=False)]
+    )
+
+    evasion_btn.click(
+        fn=evasion_test,
+        inputs=evasion_prompt,
+        outputs=[evasion_results, evasion_summary]
     )
 
 demo.launch(server_name="0.0.0.0", server_port=7860)
