@@ -21,3 +21,10 @@ Live demo: paste PowerShell code → get "human soul" score (0–100).
 Repo: https://github.com/LHMisme420/ProjectVata-PoC
 
 Try chaotic human code for 95+ scores!
+## Live Demo (try in seconds!)
+Paste any PowerShell, Python, JS (or other) code → instant soul score + breakdown + suggestions  
+👉 https://huggingface.co/spaces/Lhmisme/vata-soul-check
+
+Examples:
+- Clean AI code → ~20–30/100 (Likely AI)
+- Chaotic human code → 95–99/100 (Highly human)
