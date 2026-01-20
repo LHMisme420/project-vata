@@ -155,4 +155,46 @@ def format_output(code):
         "🔶 Likely AI / very clean"
     )
 
-    bd_lines = [f"{k}: +{v}" for k, v in breakdown.items() if isinstance(v, (
+    bd_lines = [f"{k}: +{v}" for k, v in breakdown.items() if isinstance(v, (int, float)) and v > 0 and k != "Language detected"]
+    bd_text = "\n".join(bd_lines) or "No strong signals detected"
+
+    suggestions = []
+    if total < 50:
+        suggestions.append("• Add a TODO/FIXME/HACK/NOTE comment")
+    if breakdown.get("Debug/Logging", 0) == 0:
+        suggestions.append("• Add a debug print with personality")
+    if breakdown.get("Aliases (PS)", 0) < 9:
+        suggestions.append("• Use some PowerShell aliases (? % gci cp sort select)")
+    if breakdown.get("Var name length", 0) < 10:
+        suggestions.append("• Use longer/quirkier variable names")
+    if not suggestions:
+        suggestions.append("• Already max soul — add 'hi mom' for fun 😄")
+
+    return (
+        f"{total}/100",
+        verdict,
+        bd_text,
+        "\n".join(suggestions)
+    )
+
+demo = gr.Interface(
+    fn=format_output,
+    inputs=gr.Textbox(lines=15, placeholder="Paste PowerShell, Python, JS code here..."),
+    outputs=[
+        gr.Textbox(label="Soul Score"),
+        gr.Textbox(label="Verdict"),
+        gr.Textbox(label="Breakdown"),
+        gr.Textbox(label="Humanization Suggestions")
+    ],
+    title="Vata Soul Detector PoC",
+    description="""Higher score = more human soul (comments, TODOs/FIXME/HACK/NOTE, debug, pipes/aliases/chaining, messiness).  
+Lower = clean / likely AI. Over-faking penalized. Professional patterns rewarded.  
+
+Repo: https://github.com/LHMisme420/ProjectVata-PoC""",
+    examples=[
+        ["function Backup { param($s, $d) Get-ChildItem $s | Copy-Item -Destination $d }"],
+        ["# TODO: fix mess later\nfunction Chaos { gci . | % { Write-Host lol } }"]
+    ]
+)
+
+demo.launch(server_name="0.0.0.0", server_port=7860)
