@@ -1,3 +1,4 @@
+description = "Paste any code (PowerShell, Python, JS, etc.) → get instant soul score (0–100). Higher = more human (comments, TODOs, debug, pipes/aliases, messiness). Lower = clean / likely AI."
 import gradio as gr
 import re
 from statistics import variance
