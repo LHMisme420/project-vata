@@ -108,6 +108,9 @@ def soul_score(code: str):
     return {"total": total, "breakdown": breakdown, "language": lang}
 
 def format_output(code):
+    if not code.strip():
+        return "0/100", "🔶 Likely AI / very clean", "Paste some code first", "No suggestions yet"
+
     result = soul_score(code)
     total = int(result["total"])
     breakdown = result["breakdown"]
