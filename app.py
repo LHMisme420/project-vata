@@ -21,21 +21,36 @@ def soul_score(code: str):
     score = 0
     breakdown = {"Language detected": lang}
 
-    # Universal signals
-    comments = sum(1 for line in lines if re.search(r'^\s*(#|//|/\*)', line.strip()))
-    comment_points = min(comments * 5, 20)
-    score += comment_points
-    breakdown["Comments"] = comment_points
+    # Universal signals (your existing code here - keep all of it)
+    # ... (comments, markers, blanks, indents, var length, debug calculation) ...
 
-    markers = len(re.findall(r'(?i)\b(TODO|FIXME|HACK|NOTE|BUG|XXX)\b', code))
-    marker_points = min(markers * 10, 30)
-    score += marker_points
-    breakdown["Markers"] = marker_points
+    score += debug_points
+    breakdown["Debug/Logging"] = debug_points
 
-    blanks = sum(1 for line in lines if not line.strip())
-    blank_points = min(blanks * 2, 10)
-    score += blank_points
-    breakdown["Blank lines"] = blank_points
+    # ──────────────────────────────────────────────
+    # NEGATION SIGNALS – NEW UPGRADE
+    # ──────────────────────────────────────────────
+
+    # Over-marker penalty: too many TODO/FIXME/HACK = suspicious gaming
+    if markers > 8:
+        penalty = min((markers - 8) * 8, 30)  # max -30
+        score -= penalty
+        breakdown["Over-faking penalty (too many markers)"] = -penalty
+
+    # Over-debug penalty: too many prints/logs = fake human
+    if debug_points > 6:
+        penalty = min((debug_points - 6) * 5, 20)  # max -20
+        score -= penalty
+        breakdown["Over-debug penalty (too much logging)"] = -penalty
+
+    # Over-chaos hard cap: extreme marker + debug combo = cap at 85–90
+    if markers + debug_points > 20:
+        chaos_cap = 85 + (markers + debug_points - 20) * -2
+        score = min(score, chaos_cap)
+        breakdown["Over-chaos cap"] = f"Capped at {chaos_cap} (extreme marker/debug combo)"
+
+    total = min(max(score, 0), 100)  # clamp 0–100
+    return {"total": total, "breakdown": breakdown, "language": lang}
 
     indents = []
     for line in lines:
