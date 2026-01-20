@@ -141,5 +141,31 @@ with gr.Blocks(title="VATA Soul Check + Humanizer") as demo:
     )
 
     gr.Markdown("Repo: https://github.com/LHMisme420/project-vata | @Lhmisme #ProjectVata")
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
 
+# One-time: generate or load your key pair (do this locally, never commit private key!)
+# For testing: generate once and save public key
+private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+def sign_receipt(receipt_dict):
+    receipt_json = json.dumps(receipt_dict, sort_keys=True)
+    signature = private_key.sign(
+        receipt_json.encode(),
+        padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+        hashes.SHA256()
+    )
+    return signature.hex()
+
+# In humanize function, after creating receipt:
+receipt = {...}  # your existing dict
+receipt["signature"] = sign_receipt(receipt)
+receipt["signer_pubkey"] = private_key.public_key().public_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PublicFormat.SubjectPublicKeyInfo
+).decode()
+
+# Then return receipt as before
 demo.launch()
