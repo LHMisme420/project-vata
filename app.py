@@ -3,7 +3,7 @@ import random
 import re
 import hashlib
 import json
-
+import re
 def soul_score(code):
     if not code.strip(): return 0
     score = 0
