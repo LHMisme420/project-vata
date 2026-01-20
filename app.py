@@ -63,9 +63,7 @@ def soul_score(code: str):
     score += var_points
     breakdown["Var name length"] = var_points
 
-    # Initialize debug_points early to avoid UnboundLocalError
     debug_points = 0
-
     if lang == "powershell":
         pipes = code.count('|')
         pipe_points = min(max(0, pipes - 2) * 2, 15)
@@ -106,7 +104,29 @@ def soul_score(code: str):
     score += debug_points
     breakdown["Debug/Logging"] = debug_points
 
-    total = min(score, 100)
+    # ──────────────────────────────────────────────
+    # NEGATION SIGNALS – added to make it harder to game
+    # ──────────────────────────────────────────────
+
+    # Over-marker penalty: too many TODO/FIXME/HACK = suspicious
+    if markers > 8:
+        penalty = min((markers - 8) * 8, 30)  # max -30
+        score -= penalty
+        breakdown["Over-faking penalty (too many markers)"] = -penalty
+
+    # Over-debug penalty: too many prints/logs = fake human
+    if debug_points > 6:
+        penalty = min((debug_points - 6) * 5, 20)  # max -20
+        score -= penalty
+        breakdown["Over-debug penalty (too much logging)"] = -penalty
+
+    # Over-chaos hard cap: extreme marker + debug combo = cap at 85–90
+    if markers + debug_points > 20:
+        chaos_cap = 85 + (markers + debug_points - 20) * -2
+        score = min(score, chaos_cap)
+        breakdown["Over-chaos cap"] = f"Capped at {chaos_cap} (extreme marker/debug combo)"
+
+    total = min(max(score, 0), 100)  # clamp 0–100
     return {"total": total, "breakdown": breakdown, "language": lang}
 
 def format_output(code):
@@ -157,7 +177,7 @@ demo = gr.Interface(
     ],
     title="Vata Soul Detector PoC",
     description="""Higher score = more human soul (comments, TODOs/FIXME/HACK/NOTE, debug, pipes/aliases/chaining, messiness).  
-Lower = clean / likely AI.  
+Lower = clean / likely AI. Over-faking penalized.  
 
 Repo: https://github.com/LHMisme420/ProjectVata-PoC""",
     examples=[
