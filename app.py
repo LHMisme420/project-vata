@@ -79,6 +79,22 @@ def soul_score(code: str):
         debug = len(re.findall(r'\b(Write-Host|Write-Debug|Write-Verbose|Write-Warning)\b', code, re.I))
         debug_points = min(debug * 5, 10)
 
+        # PRODUCTION CODE BONUS (new upgrade)
+        pro_bonus = 0
+        if '[CmdletBinding()]' in code:
+            pro_bonus += 12  # professional cmdlet structure
+        if re.search(r'try\s*{.*?}\s*catch', code, re.I | re.DOTALL):
+            pro_bonus += 10  # proper error handling
+        if re.search(r'\[Parameter\(Mandatory=', code, re.I):
+            pro_bonus += 8  # mandatory parameters
+        if '-ErrorAction' in code or '-EA' in code:
+            pro_bonus += 6  # explicit error handling
+        if re.search(r'function\s+[A-Z][a-zA-Z0-9]+-[A-Z][a-zA-Z0-9]+', code):
+            pro_bonus += 5  # Verb-Noun naming convention
+        if pro_bonus > 0:
+            score += pro_bonus
+            breakdown["Professional PS patterns bonus"] = pro_bonus
+
     elif lang == "python":
         debug = len(re.findall(r'\b(print|logger\.|logging\.|pdb\.|ipdb\.|console\.log)\b', code, re.I))
         debug_points = min(debug * 5, 10)
@@ -104,24 +120,7 @@ def soul_score(code: str):
     score += debug_points
     breakdown["Debug/Logging"] = debug_points
 
-    # NEGATION SIGNALS: Penalize over-faking / suspicious extremes
-    if markers > 8:
-        over_marker_penalty = min((markers - 8) * 8, 30)
-        score -= over_marker_penalty
-        breakdown["Over-faking penalty (too many markers)"] = -over_marker_penalty
-
-    if debug_points > 6:
-        over_debug_penalty = min((debug_points - 6) * 5, 20)
-        score -= over_debug_penalty
-        breakdown["Over-debug penalty (too much logging)"] = -over_debug_penalty
-
-    # Over-chaos cap: if markers + debug are absurdly high, hard cap total
-    if markers + debug_points > 20:
-        chaos_cap = 85 + (markers + debug_points - 20) * -2
-        score = min(score, chaos_cap)
-        breakdown["Over-chaos cap"] = f"Capped at {chaos_cap} (extreme marker/debug combo)"
-
-    total = min(max(score, 0), 100)  # clamp 0–100
+    total = min(score, 100)
     return {"total": total, "breakdown": breakdown, "language": lang}
 
 def format_output(code):
@@ -139,7 +138,7 @@ def format_output(code):
         "🔶 Likely AI / very clean"
     )
 
-    bd_lines = [f"{k}: +{v}" if v > 0 else f"{k}: {v}" for k, v in breakdown.items() if k != "Language detected"]
+    bd_lines = [f"{k}: +{v}" for k, v in breakdown.items() if isinstance(v, (int, float)) and v > 0 and k != "Language detected"]
     bd_text = "\n".join(bd_lines) or "No strong signals detected"
 
     suggestions = []
@@ -152,7 +151,7 @@ def format_output(code):
     if breakdown.get("Var name length", 0) < 10:
         suggestions.append("• Use longer/quirkier variable names")
     if not suggestions:
-        suggestions.append("• Already strong human signal — keep it messy 😄")
+        suggestions.append("• Already max soul — add 'hi mom' for fun 😄")
 
     return (
         f"{total}/100",
@@ -172,7 +171,7 @@ demo = gr.Interface(
     ],
     title="Vata Soul Detector PoC",
     description="""Higher score = more human soul (comments, TODOs/FIXME/HACK/NOTE, debug, pipes/aliases/chaining, messiness).  
-Lower = clean / likely AI. Over-faking penalized.  
+Lower = clean / likely AI. Professional patterns rewarded.  
 
 Repo: https://github.com/LHMisme420/ProjectVata-PoC""",
     examples=[
