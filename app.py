@@ -1,7 +1,6 @@
 import gradio as gr
 import re
 from statistics import variance
-from random import choice, randint
 
 def detect_language(code: str) -> str:
     code_lower = code.lower()
@@ -22,6 +21,7 @@ def soul_score(code: str):
     score = 0
     breakdown = {"Language detected": lang}
 
+    # Universal signals
     comments = sum(1 for line in lines if re.search(r'^\s*(#|//|/\*)', line.strip()))
     comment_points = min(comments * 5, 20)
     score += comment_points
@@ -79,6 +79,22 @@ def soul_score(code: str):
         debug = len(re.findall(r'\b(Write-Host|Write-Debug|Write-Verbose|Write-Warning)\b', code, re.I))
         debug_points = min(debug * 5, 10)
 
+        # PRODUCTION CODE BONUS (rewards professional patterns)
+        pro_bonus = 0
+        if '[CmdletBinding()]' in code:
+            pro_bonus += 12  # professional cmdlet structure
+        if re.search(r'try\s*{.*?}\s*catch', code, re.I | re.DOTALL):
+            pro_bonus += 10  # proper error handling
+        if re.search(r'\[Parameter\(Mandatory=', code, re.I):
+            pro_bonus += 8  # mandatory parameters
+        if '-ErrorAction' in code or '-EA' in code:
+            pro_bonus += 6  # explicit error handling
+        if re.search(r'function\s+[A-Z][a-zA-Z0-9]+-[A-Z][a-zA-Z0-9]+', code):
+            pro_bonus += 5  # Verb-Noun naming convention
+        if pro_bonus > 0:
+            score += pro_bonus
+            breakdown["Professional PS patterns bonus"] = pro_bonus
+
     elif lang == "python":
         debug = len(re.findall(r'\b(print|logger\.|logging\.|pdb\.|ipdb\.|console\.log)\b', code, re.I))
         debug_points = min(debug * 5, 10)
@@ -104,130 +120,81 @@ def soul_score(code: str):
     score += debug_points
     breakdown["Debug/Logging"] = debug_points
 
-    total = min(score, 100)
+    # NEGATION SIGNALS: Penalize over-faking / suspicious extremes
+    if markers > 8:
+        over_marker_penalty = min((markers - 8) * 8, 30)
+        score -= over_marker_penalty
+        breakdown["Over-faking penalty (too many markers)"] = -over_marker_penalty
+
+    if debug_points > 6:
+        over_debug_penalty = min((debug_points - 6) * 5, 20)
+        score -= over_debug_penalty
+        breakdown["Over-debug penalty (too much logging)"] = -over_debug_penalty
+
+    # Over-chaos cap: if markers + debug are absurdly high, hard cap total
+    if markers + debug_points > 20:
+        chaos_cap = 85 + (markers + debug_points - 20) * -2
+        score = min(score, chaos_cap)
+        breakdown["Over-chaos cap"] = f"Capped at {chaos_cap} (extreme marker/debug combo)"
+
+    total = min(max(score, 0), 100)  # clamp to 0–100
     return {"total": total, "breakdown": breakdown, "language": lang}
 
 def format_output(code):
     if not code.strip():
-        return "0/100", '<span style="color:red">🔶 Likely AI / very clean</span>', "Paste or upload code first", "No suggestions yet"
+        return "0/100", "🔶 Likely AI / very clean", "Paste some code first", "No suggestions yet"
 
     result = soul_score(code)
     total = int(result["total"])
     breakdown = result["breakdown"]
 
-    if total >= 80:
-        verdict = '<span style="color:#2ecc71; font-weight:bold">🟢 Highly human / chaotic</span>'
-    elif total >= 60:
-        verdict = '<span style="color:#27ae60; font-weight:bold">🟢 Definitely human</span>'
-    elif total >= 40:
-        verdict = '<span style="color:#f39c12; font-weight:bold">🟡 Mixed / edited</span>'
-    else:
-        verdict = '<span style="color:#e74c3c; font-weight:bold">🔶 Likely AI / very clean</span>'
+    verdict = (
+        "🟢 Highly human / chaotic" if total >= 80 else
+        "🟢 Definitely human" if total >= 60 else
+        "🟡 Mixed / edited" if total >= 40 else
+        "🔶 Likely AI / very clean"
+    )
 
-    bd_lines = []
-    for k, v in breakdown.items():
-        if isinstance(v, (int, float)) and v > 0 and k != "Language detected":
-            bd_lines.append(f"<strong>{k}</strong>: +{v}")
-    bd_text = "<br>".join(bd_lines) or "No strong signals detected"
+    bd_lines = [f"{k}: +{v}" if v > 0 else f"{k}: {v}" for k, v in breakdown.items() if k != "Language detected"]
+    bd_text = "\n".join(bd_lines) or "No strong signals detected"
 
     suggestions = []
     if total < 50:
-        suggestions.append("Add a TODO/FIXME/HACK/NOTE comment somewhere")
+        suggestions.append("• Add a TODO/FIXME/HACK/NOTE comment")
     if breakdown.get("Debug/Logging", 0) == 0:
-        suggestions.append("Throw in a debug print with some personality")
+        suggestions.append("• Add a debug print with personality")
     if breakdown.get("Aliases (PS)", 0) < 9:
-        suggestions.append("Use some PowerShell aliases (? % gci cp sort select)")
+        suggestions.append("• Use some PowerShell aliases (? % gci cp sort select)")
     if breakdown.get("Var name length", 0) < 10:
-        suggestions.append("Rename variables to be longer or quirkier")
+        suggestions.append("• Use longer/quirkier variable names")
     if not suggestions:
-        suggestions.append("Already very human — add an easter egg comment for fun 😄")
-
-    suggest_text = "<br>".join(f"• {s}" for s in suggestions) or "No suggestions — it's soulful!"
+        suggestions.append("• Already strong human signal — keep it messy 😄")
 
     return (
         f"{total}/100",
         verdict,
         bd_text,
-        suggest_text
+        "\n".join(suggestions)
     )
 
-with gr.Blocks(theme=gr.themes.Soft()) as demo:
-    gr.Markdown("# Vata Soul Detector PoC")
-    gr.Markdown("**Paste or upload code → get instant soul score (0–100)**")
-    gr.Markdown("Higher = more human feel (comments, TODOs, debug, pipes/aliases, messiness, personality leaks). Lower = clean / likely AI-generated.")
-    gr.Markdown("Repo: [github.com/LHMisme420/ProjectVata-PoC](https://github.com/LHMisme420/ProjectVata-PoC) • by @Lhmisme")
+demo = gr.Interface(
+    fn=format_output,
+    inputs=gr.Textbox(lines=15, placeholder="Paste PowerShell, Python, JS code here..."),
+    outputs=[
+        gr.Textbox(label="Soul Score"),
+        gr.Textbox(label="Verdict"),
+        gr.Textbox(label="Breakdown"),
+        gr.Textbox(label="Humanization Suggestions")
+    ],
+    title="Vata Soul Detector PoC",
+    description="""Higher score = more human soul (comments, TODOs/FIXME/HACK/NOTE, debug, pipes/aliases/chaining, messiness).  
+Lower = clean / likely AI. Over-faking penalized. Professional patterns rewarded.  
 
-    with gr.Row():
-        code_input = gr.Textbox(lines=12, placeholder="Paste PowerShell, Python, JS code here...", label="Code")
-        file_input = gr.File(label="Or upload .ps1 / .py / .js file", file_types=[".ps1", ".py", ".js", ".cs", ".sh"])
-
-    with gr.Row():
-        score_btn = gr.Button("Score Code", variant="primary")
-        clear_btn = gr.Button("Clear", variant="secondary")
-
-    score_display = gr.Markdown(label="Soul Score", value="Waiting...")
-    verdict_display = gr.Markdown(label="Verdict", value="")
-    breakdown_display = gr.Markdown(label="Breakdown", value="")
-    suggestions_display = gr.Markdown(label="Suggestions to Humanize", value="")
-
-    why_expander = gr.Accordion("Why this score?", open=False)
-    with why_expander:
-        gr.Markdown("""
-        - **Comments & markers** (TODO/FIXME/HACK/NOTE) = human planning & self-notes  
-        - **Debug prints** (Write-Host, print, console.log) = human troubleshooting  
-        - **Pipes/aliases/chaining** = natural scripting style  
-        - **Var names & indentation mess** = human quirks & breathing room  
-        - **Professional patterns** (CmdletBinding, try/catch) = experienced engineer  
-        - **Penalties** for over-faking (too many markers/debug) = detects gaming
-        """)
-
-    def process_input(code, file):
-        if file is not None:
-            with open(file.name, 'r', encoding='utf-8', errors='ignore') as f:
-                code = f.read()
-        return code
-
-    def on_score(code, file):
-        code = process_input(code, file)
-        result = soul_score(code)
-        total = int(result["total"])
-        breakdown = result["breakdown"]
-
-        verdict = (
-            f'<span style="color:#2ecc71; font-weight:bold; font-size:1.4em">🟢 Highly human / chaotic ({total}/100)</span>' if total >= 80 else
-            f'<span style="color:#27ae60; font-weight:bold; font-size:1.3em">🟢 Definitely human ({total}/100)</span>' if total >= 60 else
-            f'<span style="color:#f39c12; font-weight:bold; font-size:1.2em">🟡 Mixed / edited ({total}/100)</span>' if total >= 40 else
-            f'<span style="color:#e74c3c; font-weight:bold; font-size:1.2em">🔶 Likely AI / very clean ({total}/100)</span>'
-        )
-
-        bd_lines = [f"**{k}**: +{v}" for k, v in breakdown.items() if isinstance(v, (int, float)) and v > 0 and k != "Language detected"]
-        bd_text = "<br>".join(bd_lines) or "No strong signals detected"
-
-        suggestions = []
-        if total < 50:
-            suggestions.append("Add a TODO/FIXME/HACK/NOTE comment")
-        if breakdown.get("Debug/Logging", 0) == 0:
-            suggestions.append("Add a debug print with personality")
-        if breakdown.get("Aliases (PS)", 0) < 9:
-            suggestions.append("Use some PowerShell aliases (? % gci cp sort select)")
-        if breakdown.get("Var name length", 0) < 10:
-            suggestions.append("Use longer/quirkier variable names")
-        if not suggestions:
-            suggestions.append("Already very human — add an easter egg comment for fun 😄")
-
-        suggest_text = "<br>".join(f"• {s}" for s in suggestions) or "No suggestions — it's soulful!"
-
-        return f"**Soul Score: {total}/100**", verdict, bd_text, suggest_text
-
-    score_btn.click(
-        fn=on_score,
-        inputs=[code_input, file_input],
-        outputs=[score_display, verdict_display, breakdown_display, suggestions_display]
-    )
-
-    clear_btn.click(
-        fn=lambda: ("", "", "", ""),
-        outputs=[score_display, verdict_display, breakdown_display, suggestions_display]
-    )
+Repo: https://github.com/LHMisme420/ProjectVata-PoC""",
+    examples=[
+        ["function Backup { param($s, $d) Get-ChildItem $s | Copy-Item -Destination $d }"],
+        ["# TODO: fix mess later\nfunction Chaos { gci . | % { Write-Host lol } }"]
+    ]
+)
 
 demo.launch(server_name="0.0.0.0", server_port=7860)
