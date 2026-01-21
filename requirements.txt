@@ -1,2 +1,7 @@
 streamlit>=1.30.0
 gitpython
+transformers>=4.35.0
+datasets>=2.14.0
+torch>=2.0.0
+accelerate>=0.25.0   # for better training
+scikit-learn         # for metrics
