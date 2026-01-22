@@ -153,7 +153,7 @@ demo = gr.Interface(
         gr.Textbox(label="Confidence", interactive=False),
         gr.Textbox(label="Proof of Integrity (SHA256)", interactive=False, lines=4)
     ],
-    title="🜆 VATA 2.0 — Sacred Soul Detector (ZK Integrity Proof Live!)"
+  title="\u2726 VATA 2.0 — Sacred Soul Detector (ZK Integrity Proof Live!)"
 description="Built by Leroy H. Mason (@Lhmisme) | Legion Nexus | 2026\nProves ethical code compliance — boosted detection, violations scan, SHA256 integrity proof. Test your code!"
     examples=[
         ["def hello(name): print(f'Hi {name}!')", "Clean Code"],
