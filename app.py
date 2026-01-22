@@ -3,10 +3,7 @@ import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import numpy as np
 
-# ────────────────────────────────────────────────
-# CONFIG: Use base CodeBERT for now (working fallback)
-# Once you train & push v2, change to: "Lhmisme/vata-soul-detector-v2"
-# ────────────────────────────────────────────────
+# CONFIG: Base CodeBERT fallback (change to your trained repo once pushed)
 model_name = "microsoft/codebert-base"
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -26,7 +23,7 @@ def soul_check(code: str):
     inputs = tokenizer(code, return_tensors="pt", truncation=True, padding=True, max_length=512)
     with torch.no_grad():
         logits = model(**inputs).logits
-        prob = torch.softmax(logits, dim=-1)[0][1].item()  # Prob of "has soul" (positive class)
+        prob = torch.softmax(logits, dim=-1)[0][1].item()  # Prob of "has soul"
 
     score = prob * 100
     if score > 70:
@@ -39,7 +36,7 @@ def soul_check(code: str):
         classification = "🔴 SOULLESS ABOMINATION"
         verdict = "VATA REJECTED"
 
-    # Basic Sacred Ethics Charter violation scan (expandable)
+    # Sacred Ethics Charter violations
     violations = []
     lower_code = code.lower()
     if any(kw in lower_code for kw in ["os.system(", "subprocess.", "exec(", "eval("]):
@@ -60,7 +57,7 @@ def soul_check(code: str):
         "Raw Code": code
     }
 
-# Cyberpunk-themed Gradio interface
+# Cyberpunk CSS (layers over the theme)
 custom_css = """
 body {
     background: linear-gradient(135deg, #0f0f0f, #1a0033);
@@ -100,9 +97,10 @@ demo = gr.Interface(
     description=(
         "Built by Leroy H. Mason (@Lhmisme) | Legion Nexus Approved | 2026\n\n"
         "Drop code → get soul score, classification, and ethics violations scan.\n"
-        "Higher score = more human-like/ethical/creative code."
+        "Higher score = more human-like/ethical/creative code.\n"
+        "(Using base CodeBERT — v2 coming soon!)"
     ),
-    theme=gr.themes.Dark(),
+    theme=gr.themes.Soft(),  # Modern dark-ish built-in theme (replaces old Dark)
     css=custom_css,
     allow_flagging="never",
 )
