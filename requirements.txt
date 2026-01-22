@@ -1,11 +1,8 @@
 streamlit>=1.30.0
 gitpython
-transformers>=4.35.0
-datasets>=2.14.0
-torch>=2.0.0
-accelerate>=0.25.0   # for better training
-scikit-learn         # for metrics
+gradio==6.3.0
 torch
 transformers
-gradio>=4.0
 numpy
+ezkl==0.7.2  # latest stable as of Jan 2026
+onnx
