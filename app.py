@@ -3,7 +3,7 @@ import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import numpy as np
 
-# CONFIG: Base CodeBERT fallback (change to your trained repo once pushed)
+# CONFIG: Base CodeBERT fallback (swap to your trained model once pushed)
 model_name = "microsoft/codebert-base"
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -23,7 +23,7 @@ def soul_check(code: str):
     inputs = tokenizer(code, return_tensors="pt", truncation=True, padding=True, max_length=512)
     with torch.no_grad():
         logits = model(**inputs).logits
-        prob = torch.softmax(logits, dim=-1)[0][1].item()  # Prob of "has soul"
+        prob = torch.softmax(logits, dim=-1)[0][1].item()  # Prob of "has soul" class
 
     score = prob * 100
     if score > 70:
@@ -36,7 +36,7 @@ def soul_check(code: str):
         classification = "🔴 SOULLESS ABOMINATION"
         verdict = "VATA REJECTED"
 
-    # Sacred Ethics Charter violations
+    # Sacred Ethics Charter violations scan
     violations = []
     lower_code = code.lower()
     if any(kw in lower_code for kw in ["os.system(", "subprocess.", "exec(", "eval("]):
@@ -57,7 +57,7 @@ def soul_check(code: str):
         "Raw Code": code
     }
 
-# Cyberpunk CSS (layers over the theme)
+# Cyberpunk custom CSS (still works as string)
 custom_css = """
 body {
     background: linear-gradient(135deg, #0f0f0f, #1a0033);
@@ -84,6 +84,7 @@ button:hover {
 }
 """
 
+# Build the Interface WITHOUT theme/css/allow_flagging here
 demo = gr.Interface(
     fn=soul_check,
     inputs=gr.Textbox(
@@ -98,12 +99,15 @@ demo = gr.Interface(
         "Built by Leroy H. Mason (@Lhmisme) | Legion Nexus Approved | 2026\n\n"
         "Drop code → get soul score, classification, and ethics violations scan.\n"
         "Higher score = more human-like/ethical/creative code.\n"
-        "(Using base CodeBERT — v2 coming soon!)"
+        "(Base CodeBERT fallback — v2 trained model coming soon!)"
     ),
-    theme=gr.themes.Soft(),  # Modern dark-ish built-in theme (replaces old Dark)
-    css=custom_css,
-    allow_flagging="never",
 )
 
-if __name__ == "__main__":
-    demo.launch()
+# Apply theme, css, and flagging_mode HERE in launch()
+demo.launch(
+    theme=gr.themes.Soft(),          # Modern dark/soft theme (closest to cyberpunk base)
+    css=custom_css,                  # Your custom styles override
+    flagging_mode="never",           # No flagging button/UI
+    server_name="0.0.0.0",
+    server_port=7860
+)
