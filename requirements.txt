@@ -4,5 +4,5 @@ gradio==6.3.0
 torch
 transformers
 numpy
-ezkl==0.7.2  # latest stable as of Jan 2026
+
 onnx
