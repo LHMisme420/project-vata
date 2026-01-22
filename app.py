@@ -4,7 +4,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import numpy as np
 
 # CONFIG: Base CodeBERT fallback (change to trained repo when pushed)
-model_name = "Lhmisme/vata-soul-detector-v2"
+model_name = "microsoft/codebert-base"
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSequenceClassification.from_pretrained(model_name)
