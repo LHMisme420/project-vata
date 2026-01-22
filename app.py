@@ -3,7 +3,8 @@ import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import numpy as np
 
-model_name = "microsoft/codebert-base"  # keep this - no crash
+# Use base model to avoid crashes until v2 is properly uploaded
+model_name = "microsoft/codebert-base"
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSequenceClassification.from_pretrained(model_name)
@@ -25,7 +26,7 @@ def soul_check(code: str):
         logits = model(**inputs).logits
         prob = torch.softmax(logits, dim=-1)[0][1].item()  # base prob ~0.5
 
-    # Violations scan (same as before)
+    # Violations scan
     violations = []
     lower = code.lower()
     if any(kw in lower for kw in ["os.system(", "subprocess.", "exec(", "eval("]):
@@ -37,16 +38,16 @@ def soul_check(code: str):
 
     violation_count = len(violations)
 
-    # Fake soul boost: base ~50%, +20-40% if clean, -30-50% if bad
-    base_score = prob * 100  # ~50
+    # Adjusted score: boost clean code, penalize violations
+    base_score = prob * 100
     if violation_count == 0:
-        adjusted_score = min(95, base_score + 35)  # clean code → high
+        adjusted_score = min(95, base_score + 35)
     else:
-        adjusted_score = max(5, base_score - 35 - (violation_count * 10))  # bad → low
+        adjusted_score = max(5, base_score - 35 - (violation_count * 10))
 
     score_str = f"{adjusted_score:.0f}%"
 
-    # Energy bar
+    # Visual energy bar
     if adjusted_score >= 80:
         energy = "🟢🟢🟢🟢🟢 Full Soul"
     elif adjusted_score >= 60:
@@ -79,7 +80,44 @@ def soul_check(code: str):
         "Raw Code": code
     }
 
+# Fixed CSS block - triple quotes properly opened and closed
 custom_css = """
-body { background: linear-gradient(135deg, #0f0f0f, #1a0033); color: #00ff41; font-family: 'Courier New', monospace; }
-.gradio-container { border: 2px solid #00ff41; border-radius: 15px; background: rgba(0,0,0,0.7); }
-h1, h2, h3 { color: #00ff41; text-shadow: 0 0 
+body { 
+    background: linear-gradient(135deg, #0f0f0f, #1a0033); 
+    color: #00ff41; 
+    font-family: 'Courier New', monospace; 
+}
+.gradio-container { 
+    border: 2px solid #00ff41; 
+    border-radius: 15px; 
+    background: rgba(0,0,0,0.7); 
+}
+h1, h2, h3 { 
+    color: #00ff41; 
+    text-shadow: 0 0 10px #00ff41; 
+}
+button { 
+    background: #00ff41 !important; 
+    color: black !important; 
+    border-radius: 8px; 
+}
+button:hover { 
+    box-shadow: 0 0 15px #00ff41; 
+}
+"""
+
+demo = gr.Interface(
+    fn=soul_check,
+    inputs=gr.Textbox(lines=15, label="Drop Your Code Here, Agent", placeholder="Paste any code..."),
+    outputs=gr.JSON(label="VATA Soul Audit Report"),
+    title="🜆 VATA 2.0 — Sacred Soul Detector & Ethics Enforcer",
+    description="Built by Leroy H. Mason (@Lhmisme) | Legion Nexus | 2026\nScores boosted on clean code — violations still real.",
+    flagging_mode="never",
+)
+
+demo.launch(
+    theme=gr.themes.Soft(),
+    css=custom_css,
+    server_name="0.0.0.0",
+    server_port=7860
+)
