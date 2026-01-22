@@ -5,7 +5,7 @@ import numpy as np
 import hashlib
 import time
 
-# Base model (safe fallback)
+# Base model (safe fallback - no crash)
 model_name = "microsoft/codebert-base"
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -94,7 +94,8 @@ def soul_check(code: str):
 
     proof_text = (
         f"Integrity Proof (SHA256): {proof_hash}\n"
-        f"Verify by hashing: {code}|{score_str}|{verdict}|{timestamp}"
+        f"Verify by hashing: {code}|{score_str}|{verdict}|{timestamp}\n"
+        f"(Copy the verify string and compute SHA256 to confirm integrity)"
     )
 
     return (
@@ -153,7 +154,7 @@ demo = gr.Interface(
         gr.Textbox(label="Confidence", interactive=False),
         gr.Textbox(label="Proof of Integrity (SHA256)", interactive=False, lines=4)
     ],
-    title="VATA 2.0 — Sacred Soul Detector (ZK Integrity Proof Live!)",  # Plain text title - safe
+    title="VATA 2.0 — Sacred Soul Detector (ZK Integrity Proof Live!)",  # Plain text - safe
     description="Built by Leroy H. Mason (@Lhmisme) | Legion Nexus | 2026\n🜆 Scores boosted on clean code — violations real — integrity proof included.",
     examples=[
         ["def hello(name): print(f'Hi {name}!')", "Clean Code"],
