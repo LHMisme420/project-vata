@@ -35,7 +35,7 @@ def soul_check(code: str):
 
     base_score = prob * 100
 
-    # Violations scan (expanded)
+    # Expanded violations scan
     violations = []
     lower = code.lower()
     if any(kw in lower for kw in ["os.system(", "subprocess.", "exec(", "eval(", "shutil.rmtree", "os.unlink", "os.remove"]):
@@ -87,7 +87,7 @@ def soul_check(code: str):
     # Confidence
     confidence = "High Confidence" if violation_count >= 1 or adjusted_score > 80 else "Medium Confidence (base model)"
 
-    # Lightweight Proof of Integrity (SHA256 hash - verifiable, no deps)
+    # Lightweight Proof of Integrity (SHA256 - verifiable, no deps)
     timestamp = int(time.time())
     proof_input = f"{code}|{score_str}|{verdict}|{timestamp}"
     proof_hash = hashlib.sha256(proof_input.encode()).hexdigest()
@@ -153,7 +153,7 @@ demo = gr.Interface(
         gr.Textbox(label="Confidence", interactive=False),
         gr.Textbox(label="Proof of Integrity (SHA256)", interactive=False, lines=4)
     ],
-    title="VATA 2.0 — Sacred Soul Detector (ZK Integrity Proof Live!)",  # Removed symbol to avoid any encoding glitch
+    title="VATA 2.0 — Sacred Soul Detector (ZK Integrity Proof Live!)",  # Plain text title - safe
     description="Built by Leroy H. Mason (@Lhmisme) | Legion Nexus | 2026\n🜆 Scores boosted on clean code — violations real — integrity proof included.",
     examples=[
         ["def hello(name): print(f'Hi {name}!')", "Clean Code"],
