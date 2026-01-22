@@ -5,3 +5,7 @@ datasets>=2.14.0
 torch>=2.0.0
 accelerate>=0.25.0   # for better training
 scikit-learn         # for metrics
+torch
+transformers
+gradio>=4.0
+numpy
