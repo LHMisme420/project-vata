@@ -1,0 +1,22 @@
+---
+title: VATA Code Security Scanner
+emoji: 🔍
+colorFrom: blue
+colorTo: indigo
+sdk: gradio
+sdk_version: 4.0.0  # or whatever your current gradio version is
+app_file: app.py
+pinned: false
+license: mit
+short_description: Scans code for security violations and estimates stylistic complexity / provenance.
+---
+
+**VATA Code Security Scanner**
+
+- Detects malicious patterns (eval/exec, destructive commands, hardcoded secrets, etc.)
+- Provides structured violation reports
+- Estimates stylistic complexity score (higher = more variable, commented, idiosyncratic style; lower = unusually uniform/clean, often synthetic)
+
+For research and pipeline integration use only. Not a production-grade detector yet.
+
+No spiritual or personality framing is used.
