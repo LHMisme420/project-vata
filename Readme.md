@@ -1,15 +1,13 @@
-VATA Soul Check - original working version restored.
-
-
 ---
+sdk: gradio
+app_file: app.py
 title: VATA Soul Check
 emoji: ✨
 colorFrom: purple
 colorTo: pink
-sdk: gradio
-sdk_version: 4.19.2  # older stable version that avoids many bugs
-app_file: app.py
+sdk_version: 4.19.2
+python_version: 3.9
 pinned: false
 ---
 
-Simple code checker demo.
+VATA Soul Check - code checker demo
