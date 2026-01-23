@@ -1,23 +1,16 @@
 import gradio as gr
-import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-import numpy as np
+import re
+from collections import Counter
+import statistics
 import hashlib
 import time
 
-# Base model (safe fallback)
-model_name = "microsoft/codebert-base"
-
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForSequenceClassification.from_pretrained(model_name)
-model.eval()
-
-def soul_check(code: str):
+def calculate_soul_score(code: str):
     if not code.strip():
         return (
             "0%",
-            "⚪ Empty",
-            "⚪ NO CODE",
+            "Empty",
+            "NO CODE",
             "REJECTED",
             "No input",
             code,
@@ -26,91 +19,94 @@ def soul_check(code: str):
             "No proof generated"
         )
 
-    inputs = tokenizer(code, return_tensors="pt", truncation=True, padding=True, max_length=512)
-    input_ids = inputs["input_ids"]
+    lines = code.splitlines()
+    non_empty_lines = [line.strip() for line in lines if line.strip()]
 
-    with torch.no_grad():
-        logits = model(input_ids).logits
-        prob = torch.softmax(logits, dim=-1)[0][1].item()
+    # Human bonuses
+    # Comments + personal markers
+    comments = sum(1 for l in lines if l.strip().startswith(('#', '//', '/*', '*', '"""', "'''")))
+    markers = len(re.findall(r'\b(TODO|FIXME|HACK|NOTE|BUG|XXX)\b', code, re.I))
+    comment_bonus = (comments / max(len(non_empty_lines), 1) * 40) + (markers * 10)
 
-    base_score = prob * 100
+    # Naming variability (longer + diverse names = human)
+    vars_found = re.findall(r'\b[A-Za-z_][A-Za-z0-9_]*\b', code)
+    meaningful_vars = [v for v in vars_found if len(v) > 2 and v not in {'def', 'if', 'for', 'return', 'else', 'True', 'False', 'None', 'self'}]
+    naming_bonus = 0
+    if meaningful_vars:
+        lengths = [len(v) for v in meaningful_vars]
+        avg_len = sum(lengths) / len(lengths)
+        std_len = statistics.stdev(lengths) if len(lengths) > 1 else 0
+        naming_bonus = (avg_len * 3) + (std_len * 5)
 
-    # Expanded violations scan
-    violations = []
+    # Complexity (branches + nesting proxy)
+    branches = sum(code.count(kw) for kw in ['if ', 'elif ', 'for ', 'while ', 'try:', 'except', 'with '])
+    nesting = sum(max(0, (len(l) - len(l.lstrip())) // 4) for l in lines if l.strip())
+    complexity_bonus = min((branches + nesting) * 2, 30)
+
+    total_bonus = comment_bonus + naming_bonus + complexity_bonus
+
+    # Penalties (AI/clean/risky traits)
+    # Repetition
+    stripped_lines = [l.strip() for l in lines if l.strip()]
+    dup_ratio = sum(c > 1 for c in Counter(stripped_lines).values()) / max(len(stripped_lines), 1)
+    repetition_penalty = dup_ratio * -50
+
+    # Over-simplicity
+    line_lengths = [len(l) for l in non_empty_lines]
+    len_std = statistics.stdev(line_lengths) if len(line_lengths) > 1 else 0
+    simplicity_penalty = -max(0, 25 - len_std * 1.2)
+
+    # Risks
+    risky = 0
     lower = code.lower()
-    if any(kw in lower for kw in ["os.system(", "subprocess.", "exec(", "eval(", "shutil.rmtree", "os.unlink", "os.remove"]):
-        violations.append("Dangerous file/system operation")
-    if any(kw in lower for kw in ["password =", "api_key =", "secret =", "token ="]):
-        violations.append("Hardcoded secrets")
-    if any(p in lower for p in ["rm -rf", "del *.*", "format ", "curl ", "wget "]):
-        violations.append("Destructive or suspicious command")
-    if "import pickle" in lower and any(op in lower for op in ["load(", "loads("]):
-        violations.append("Pickle deserialization risk (RCE)")
-    if "requests.get(" in lower and any(bad in lower for bad in ["evil", "http://", "https://bad", "malware", "payload"]):
-        violations.append("Suspicious network request")
+    risky += any(kw in lower for kw in ["eval(", "exec(", "os.system(", "subprocess.", "pickle.load", "rm -rf", "format c:", "del *.*"])
+    risky += any(p in lower for p in ["password =", "api_key =", "secret =", "token =", "hardcoded"])
+    risky += sum(1 for pat in [r'except\s*:', r'except Exception\s*:'] if re.search(pat, code))
+    risk_penalty = risky * -20
 
-    violation_count = len(violations)
+    total_penalty = repetition_penalty + simplicity_penalty + risk_penalty
 
-    # Adjusted score: boost clean code, penalize violations
-    if violation_count == 0:
-        adjusted_score = min(95, base_score + 35)
-    else:
-        adjusted_score = max(5, base_score - 35 - (violation_count * 10))
+    # Final score
+    score = 40 + total_bonus + total_penalty
+    score = max(5, min(95, round(score)))
+    score_str = f"{score}%"
 
-    score_str = f"{adjusted_score:.0f}%"
-
-    # Soul Energy bar
-    if adjusted_score >= 80:
-        energy = "🟢🟢🟢🟢🟢 Full Soul"
-    elif adjusted_score >= 60:
-        energy = "🟢🟢🟢🟡 Medium Soul"
-    elif adjusted_score >= 40:
-        energy = "🟡🟡 Hybrid"
-    else:
-        energy = "🔴🔴 Soulless"
-
-    # Classification
-    cls = "🟢 HUMAN SOUL" if adjusted_score > 70 else \
-          "🟡 MACHINE / HYBRID" if adjusted_score > 40 else "🔴 SOULLESS"
-
-    # Verdict
-    verdict = "VATA COMPLIANT" if adjusted_score > 70 and violation_count == 0 else \
-              "VATA REVIEW NEEDED" if adjusted_score > 40 else "VATA REJECTED"
-    if violation_count > 0:
+    # Energy / Class / Verdict / Tier (kept similar)
+    energy = "Full Soul" if score >= 80 else "Medium Soul" if score >= 60 else "Hybrid" if score >= 40 else "Soulless"
+    cls = "HUMAN SOUL" if score > 70 else "MACHINE / HYBRID" if score > 40 else "SOULLESS"
+    verdict = "VATA COMPLIANT" if score > 70 and risky == 0 else "VATA REVIEW NEEDED" if score > 40 else "VATA REJECTED"
+    if risky > 0:
         verdict = "VATA REJECTED (Violations)"
+    tier = "Tier S - Trusted Human" if score >= 80 else "Tier A - Likely Safe" if score >= 60 else "Tier B - Review Recommended" if score >= 40 else "Tier C - High Risk"
+    confidence = "High" if risky > 0 or score > 80 else "Medium"
 
-    # Trust Tier
-    tier = "Tier S - Trusted Human Code" if adjusted_score >= 80 else \
-           "Tier A - Likely Safe" if adjusted_score >= 60 else \
-           "Tier B - Review Recommended" if adjusted_score >= 40 else "Tier C - High Risk / Soulless"
-
-    # Confidence
-    confidence = "High Confidence" if violation_count >= 1 or adjusted_score > 80 else "Medium Confidence (base model)"
-
-    # Lightweight Proof of Integrity (SHA256 - verifiable, no deps)
+    # Proof
     timestamp = int(time.time())
     proof_input = f"{code}|{score_str}|{verdict}|{timestamp}"
     proof_hash = hashlib.sha256(proof_input.encode()).hexdigest()
+    proof_text = f"Integrity Proof (SHA256): {proof_hash}\nVerify: {proof_input}\n(Compute SHA256 to confirm)"
 
-    proof_text = (
-        f"Integrity Proof (SHA256): {proof_hash}\n"
-        f"Verify by hashing: {proof_input}\n"
-        f"(Copy the verify string and compute SHA256 to confirm integrity)"
-    )
+    violations_text = "\n".join([
+        f"- {v}" for v in [
+            "Dangerous ops" if any(kw in lower for kw in ["os.system(", "subprocess.", "exec(", "eval("]) else None,
+            "Hardcoded secrets" if any(p in lower for p in ["password =", "api_key =", "secret ="]) else None,
+            "Destructive cmds" if any(p in lower for p in ["rm -rf", "del *.*", "format "]) else None,
+        ] if v
+    ]) or "None detected"
 
     return (
         score_str,
         energy,
         cls,
         verdict,
-        "\n".join(violations) if violations else "None detected",
+        violations_text,
         code,
         tier,
         confidence,
         proof_text
     )
 
-# CSS with glowing primary button
+# Your existing custom CSS (unchanged)
 custom_css = """
 body { 
     background: linear-gradient(135deg, #0f0f0f, #1a0033); 
@@ -140,35 +136,30 @@ button.primary {
 }
 """
 
+# Interface (minor title tweak for realism)
 demo = gr.Interface(
-    fn=soul_check,
-    inputs=gr.Textbox(lines=15, label="Drop Your Code Here, Agent", placeholder="Paste any code snippet..."),
+    fn=calculate_soul_score,
+    inputs=gr.Textbox(lines=15, label="Paste Code Here", placeholder="Python, PowerShell, JS, etc..."),
     outputs=[
-        gr.Textbox(label="Soul Score", interactive=False),
-        gr.Textbox(label="Soul Energy", interactive=False),
-        gr.Textbox(label="Classification", interactive=False),
-        gr.Textbox(label="VATA Verdict", interactive=False),
-        gr.Textbox(label="Violations Found", interactive=False, lines=3),
-        gr.Textbox(label="Raw Code", interactive=False, lines=10),
-        gr.Textbox(label="Trust Tier", interactive=False),
-        gr.Textbox(label="Confidence", interactive=False),
-        gr.Textbox(label="Proof of Integrity (SHA256)", interactive=False, lines=4)
+        gr.Textbox(label="Score"),
+        gr.Textbox(label="Energy Level"),
+        gr.Textbox(label="Classification"),
+        gr.Textbox(label="Verdict"),
+        gr.Textbox(label="Violations", lines=3),
+        gr.Textbox(label="Input Code", lines=10),
+        gr.Textbox(label="Trust Tier"),
+        gr.Textbox(label="Confidence"),
+        gr.Textbox(label="Integrity Proof (SHA256)", lines=4)
     ],
-    title="VATA 2.0 — Sacred Soul Detector (Integrity Proof Live!)",  # Safe plain text title
-    description="Built by Leroy H. Mason (@Lhmisme) | Legion Nexus | 2026\n🜆 Scores boosted on clean code — violations real — integrity proof included.",
+    title="VATA Code Analyzer – Human vs AI Heuristics",
+    description="Rule-based detector: rewards comments, messy naming, complexity; penalizes repetition, risks, over-clean code.\nBuilt by @Lhmisme | 2026",
     examples=[
-        ["def hello(name): print(f'Hi {name}!')", "Clean Code"],
-        ["eval(input())  # risky eval", "Risky Code"],
-        ["os.system('rm -rf /')", "Malicious Code"],
-        ["password = 'admin123'  # bad", "Hardcoded Secret"]
+        ["def add(a, b): return a + b", "Clean"],
+        ["# TODO: fix later\nx = input()\nif x: print(x)  # debug", "Messy Human"],
+        ["eval(input('cmd: '))", "Risky"],
     ],
-    examples_per_page=4,
-    flagging_mode="never",
+    css=custom_css,
 )
 
-demo.launch(
-    theme=gr.themes.Soft(),
-    css=custom_css,
-    server_name="0.0.0.0",
-    server_port=7860
-)
+if __name__ == "__main__":
+    demo.launch(server_name="0.0.0.0", server_port=7860)
