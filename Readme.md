@@ -1,6 +1,6 @@
 VATA Soul Check - original working version restored.
 
-(If you want config later, add carefully:)
+
 ---
 title: VATA Soul Check
 emoji: ✨
