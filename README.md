@@ -4,8 +4,8 @@ emoji: 🔍
 colorFrom: blue
 colorTo: indigo
 sdk: gradio
-sdk_version: 6.4.0
-python_version: 3.9.13
+sdk_version: 4.44.0   # or keep whatever you had; 4.x is safe and works on 3.9+
+python_version: 3.10
 app_file: app.py
 pinned: false
 ---
