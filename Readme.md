@@ -1,22 +1,23 @@
 ---
-title: VATA Soul Scoring - Human Chaos Detector
+title: VATA - Soul Scoring Code Detector
 emoji: 🌀
 colorFrom: indigo
 colorTo: purple
 sdk: gradio
-sdk_version: "4.44.0"          # safe & common in late 2025 / early 2026 – change only if your requirements.txt pins something else
+sdk_version: "4.44.0"
 app_file: app.py
-python_version: "3.11"         # very safe default; most spaces run fine on this
+python_version: "3.11"
 pinned: false
 ---
 
 # Project VATA – Soul Scoring Code Detector
 
-Paste code → get soul score + ethical verdict.
+Paste code → get a "soul score" (higher = more human chaos/personality) + ethical verdict.
 
-VATA rewards human chaos, personality, TODOs, debug prints, messy naming — while rejecting soulless, overly clean AI output.
+Rewards: messy naming, TODOs, debug prints, nostalgia refs, personal quirks.  
+Punishes: overly clean, generic, soulless AI output.
 
-Live demo & full logic in app.py  
-Repo/code: https://github.com/LHMisme420/project-vata (or your actual repo link)
+Live Gradio demo in app.py  
+GitHub mirror: https://github.com/LHMisme420/project-vata (update link if needed)
 
-#AIethics #NoSoullessCode #HumanPositive
+#AIethics #HumanPositiveCoding
