@@ -28,5 +28,5 @@ Paste any PowerShell, Python, JS (or other) code → instant soul score + breakd
 Examples:
 - Clean AI code → ~20–30/100 (Likely AI)
 - Chaotic human code → 95–99/100 (Highly human)
-
+# Debug nudge - Jan 23 202
 
