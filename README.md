@@ -44,7 +44,14 @@ A Python-based pipeline that analyzes code for patterns typical of AI generation
   - Optional debug traces or clarity-focused redundancies.  
 - **Guardian Checks** (`guardian.py`, `watchdog_guard.py`):  
   Detect secrets, enforce compliance gates, and apply safety rules before/after processing.
+## Enhanced Humanizer (v1.1+)
 
+Now supports JavaScript/TypeScript in addition to Python.
+
+### Usage
+```bash
+python vata_run.py scan example.py --auto-humanize
+python vata_run.py scan script.js
 This tool helps teams audit AI-assisted code, prioritize reviews, improve LLM outputs, and meet governance requirements.
 
 ### 3. Agent & Swarm Support
