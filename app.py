@@ -1,201 +1,263 @@
-# Project Vata - Enterprise-Grade Soul Detection and Ethical AI Code Guardian
-# Version: 2.0 - Hardened for Security, Privacy, Scalability, and Compliance
-# Author: Leroy H. Mason (@LHMisme)
-# Description: Detects "soul" in code (human chaos vs. AI sterility), humanizes output,
-# blocks dangerous patterns, and provides ZK-verifiable ethics proofs.
-# Now with enterprise features: input sanitization, auth, rate limiting, logging,
-# DLP for PII, adversarial robustness, and swarm agent basics.
+# Project Vata - Enterprise-Grade Soul Detection & Ethical AI Guardian
+# HF Spaces Gradio App - Single-file version for easy deploy
+# Features: Soul scoring, danger/PII blocking, humanizer personas, swarm voting, ZK ethics stub
 
-import ast  # For static code analysis
-import re  # For regex-based checks (PII, dangerous keywords)
-import os  # For env vars and secrets (use cautiously)
-import logging  # For structured auditing
-import json  # For ethics charter and outputs
-import hashlib  # For anonymization hashing
-from typing import Dict, Any, Optional
-from flask import Flask, request, jsonify  # For API (enterprise deployment)
-from flask_limiter import Limiter  # For rate limiting
-from flask_limiter.util import get_remote_address
-import jwt  # For auth tokens
-# Note: In production, add deps like circomlib for ZK (stubbed here)
-#       Fine-tune CodeBERT? Use transformers (assume installed in env)
+import gradio as gr
+import re
+import ast
+import json
+import hashlib
+import logging
+from typing import Dict, Any, Optional, List
 
-# Setup logging for audits (JSON structured for ELK/Splunk)
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Logging for audits (visible in HF logs)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Load secrets from env (e.g., via Vault/AWS Secrets - hardcoded for PoC)
-SECRET_KEY = os.getenv('SECRET_KEY', 'supersecretkey')  # Rotate in prod!
+# Ethics charter (publicly verifiable principles)
 ETHICS_CHARTER = {
-    "principles": ["No PII leaks", "Soul threshold >70", "No injections", "Compliant with GDPR/CCPA"]
+    "title": "Vata Sacred Ethics Charter",
+    "principles": [
+        "Soul threshold > 70 for human-like approval",
+        "No PII or sensitive data leaks",
+        "No code injection / dynamic execution allowed",
+        "No destructive or malicious patterns"
+    ]
 }
 
-# Dangerous patterns to block (expandable)
-DANGEROUS_KEYWORDS = ['eval', 'exec', 'os.system', 'subprocess', 'rm -rf', 'wallet_drain', 'crypto_steal']
-PII_REGEX = re.compile(r'(?i)\b(?:[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b|(?:\d{3}-?\d{2}-?\d{4})|api_key|secret|password|wallet_address)')
+# Dangerous keywords & patterns (expandable)
+DANGEROUS_KEYWORDS = [
+    'eval', 'exec', 'os.system', 'subprocess', 'rm -rf', 'del /f /q', 
+    'wallet_drain', 'private_key', 'seed_phrase', 'Invoke-Expression', 'IEX'
+]
+DANGEROUS_REGEX = re.compile(r'|'.join(re.escape(kw) for kw in DANGEROUS_KEYWORDS), re.IGNORECASE)
 
-# Soul heuristics (v2 - rule-based + trainable stubs)
+# PII / secrets patterns (basic DLP)
+PII_REGEX = re.compile(
+    r'(?i)\b(?:[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}|'
+    r'\d{3}-\d{2}-\d{4}|api_key|secret|password|token|key=[\w\-]+|'
+    r'0x[a-fA-F0-9]{40}|bc1[qpzry9x8gf2tvdw0s3jn54khce6mua7l]+)\b'
+)
+
+def secure_parse(code: str) -> Optional[str]:
+    """Sanitize input: block dangers, check PII, static AST analysis, anonymize identifiers."""
+    if not code.strip():
+        return None
+    
+    # Block dangerous keywords/patterns
+    if DANGEROUS_REGEX.search(code):
+        logger.warning("Dangerous pattern detected")
+        raise ValueError("Blocked: Dangerous or potentially malicious pattern detected (eval/exec/injection/etc.)")
+    
+    # PII / secrets check
+    if PII_REGEX.search(code):
+        logger.warning("PII/sensitive data detected")
+        raise ValueError("Blocked: Potential PII, secrets, or sensitive data detected")
+    
+    # AST: forbid dynamic execution
+    try:
+        tree = ast.parse(code)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                func_name = getattr(node.func, 'id', '') or getattr(node.func, 'attr', '')
+                if func_name in ['eval', 'exec']:
+                    raise ValueError("Blocked: Dynamic code execution (eval/exec) forbidden")
+    except SyntaxError:
+        # Allow non-Python code (e.g. PowerShell snippets) but warn
+        logger.info("Non-Python syntax - proceeding with string-based checks only")
+    
+    # Basic anonymization: hash variable/comment identifiers that look personal
+    code = re.sub(r'\b([a-zA-Z_][\w]*)\b(?=\s*=|\()', 
+                  lambda m: hashlib.sha256(m.group(1).encode()).hexdigest()[:12], 
+                  code)
+    
+    return code
+
 def calculate_soul_score(code: str) -> Dict[str, Any]:
+    """Rule-based soul scoring (v2 - rewards chaos, comments, personality markers)"""
     score = 0
     breakdown = {}
     
-    # Comment density (humans rant)
-    comments = len(re.findall(r'#.*', code))
-    breakdown['comments'] = comments * 10
-    score += breakdown['comments']
+    # Comments density & length (humans rant)
+    comments = re.findall(r'#.*|//.*|/\*[\s\S]*?\*/', code)
+    comment_count = len(comments)
+    comment_score = min(comment_count * 12, 40)  # max 40 pts
+    breakdown['comments'] = f"{comment_count} found → +{comment_score}"
+    score += comment_score
     
-    # Variable name entropy (cursed names like why_god_why)
-    vars = re.findall(r'\b([a-zA-Z_]\w*)\s*=', code)
-    entropy = sum(len(v) > 5 and '_' in v for v in vars) * 15
-    breakdown['var_entropy'] = entropy
-    score += entropy
+    # Variable name entropy (cursed/long/underscored names)
+    vars_found = re.findall(r'\b([a-zA-Z_]\w*)\s*[=:(]', code)
+    cursed_vars = sum(1 for v in vars_found if len(v) > 6 or '_' in v or any(c.isupper() for c in v[1:]))
+    var_score = min(cursed_vars * 10, 30)
+    breakdown['variable_names'] = f"{cursed_vars}/{len(vars_found)} chaotic → +{var_score}"
+    score += var_score
     
-    # TODO/rants/debug prints
-    todos = len(re.findall(r'TODO|FIXME|DEBUG|print\(', code, re.IGNORECASE))
-    breakdown['todos_debug'] = todos * 20
-    score += breakdown['todos_debug']
+    # TODOs, FIXMEs, debug prints, rants
+    rants = len(re.findall(r'(?i)TODO|FIXME|DEBUG|print\(|console\.log|why|god|fuck|shit|damn', code))
+    rant_score = min(rants * 15, 30)
+    breakdown['rants_debug'] = f"{rants} markers → +{rant_score}"
+    score += rant_score
     
-    # Indentation messiness/emoji
-    emojis = len(re.findall(r'[\U0001F600-\U0001F64F]', code))
-    breakdown['emojis_chaos'] = emojis * 5
-    score += breakdown['emojis_chaos']
+    # Emojis, indentation chaos, extra newlines
+    emojis = len(re.findall(r'[\U0001F300-\U0001F9FF]', code))
+    emoji_score = min(emojis * 8, 15)
+    breakdown['emojis_chaos'] = f"{emojis} emojis → +{emoji_score}"
+    score += emoji_score
     
     # Cap at 100
-    score = min(score, 100)
-    
-    # Future: Add ML classifier (stub)
-    # from transformers import pipeline
-    # classifier = pipeline('text-classification', model='your-finetuned-codebert')
-    # ml_score = classifier(code)[0]['score'] * 100 if 'human' in label else 0
+    score = min(max(score, 0), 100)
     
     return {"score": score, "breakdown": breakdown}
 
-# Humanizer with personas (upgraded)
-def humanize_code(code: str, persona: str = "2am_dev_rage") -> str:
+def humanize_code(code: str, persona: str) -> str:
+    """Inject personality based on selected style"""
+    base = code.strip()
+    
     if persona == "2am_dev_rage":
-        # Inject chaos
-        code = code.replace('def ', '# Why am I doing this at 2am?\ndef ')
-        code += "\n# TODO: Fix this mess later\nprint('Why god why')  # Debug rant"
+        injections = [
+            "# Why the fuck am I still awake for this shit?",
+            "    # TODO: Burn this later",
+            "print('kill me')  # send help",
+            "\n# If this works first try I'm buying lotto tickets"
+        ]
     elif persona == "corporate_passive":
-        code += "\n# Per company policy, this is sub-optimal but compliant."
-    # Future: Use Grok/Claude API for dynamic remix (stub)
-    # response = requests.post('grok-api', json={'prompt': f"Humanize this code in {persona} style: {code}"})
-    return code
-
-# Secure Parse: Sanitize & Validate Input (Core Security)
-def secure_parse(code: str) -> Optional[str]:
-    try:
-        # Sanitize: Remove/escape dangerous stuff
-        for kw in DANGEROUS_KEYWORDS:
-            if kw in code:
-                logger.warning(f"Blocked dangerous keyword: {kw}")
-                raise ValueError(f"Dangerous pattern detected: {kw}")
-        
-        # PII Check (DLP)
-        if PII_REGEX.search(code):
-            logger.warning("PII detected - blocking")
-            raise ValueError("PII or sensitive data detected")
-        
-        # AST Static Analysis: Check for dynamic exec
-        tree = ast.parse(code)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and getattr(node.func, 'id', '') in ['eval', 'exec']:
-                raise ValueError("Dynamic execution forbidden")
-        
-        # Anonymize identifiers (hash vars/comments with user data)
-        code = re.sub(r'([a-zA-Z_]\w*)\s*=', lambda m: hashlib.sha256(m.group(1).encode()).hexdigest()[:10] + ' =', code)
-        
-        return code
-    except Exception as e:
-        logger.error(f"Parse failed: {str(e)}")
-        return None
-
-# ZK-Verifiable Ethics Proof (Stub - Use circom/halo2 in prod)
-def generate_zk_proof(code: str, soul_score: int) -> Dict[str, str]:
-    # Stub: In reality, compile circuit to prove predicates without revealing code
-    predicates = [
-        soul_score > 70,
-        "no PII" not in code,  # Simplified
-        "no injections"  # From AST
-    ]
-    if all(predicates):
-        proof = {"snark": "fake_proof_hash", "verification_key": "public_vk"}
-        logger.info("ZK Proof generated")
+        injections = [
+            "# Approved per team guidelines (sub-optimal but compliant)",
+            "    # Note: This could be refactored for better maintainability",
+            "# Stakeholders have been informed of known limitations"
+        ]
+    elif persona == "gen_z_emoji":
+        injections = [
+            "lol this code is cursed fr 💀",
+            "    # no cap this slaps tho 🔥",
+            "print('skibidi toilet moment')"
+        ]
     else:
-        proof = {"error": "Failed ethics check"}
-    return proof
+        injections = ["# Default human touch-up"]
+    
+    # Insert randomly-ish
+    lines = base.splitlines()
+    if len(lines) > 5:
+        insert_pos = len(lines) // 2
+        lines.insert(insert_pos, "\n" + "\n".join(injections) + "\n")
+    else:
+        lines.append("\n" + "\n".join(injections))
+    
+    return "\n".join(lines)
 
-# Swarm Agents (Basic - Guardian, Ethics, Refactor)
 class Agent:
     def __init__(self, role: str):
         self.role = role
     
-    def process(self, code: str, soul_data: Dict) -> str:
+    def vote(self, code: str, soul_data: Dict) -> str:
+        score = soul_data['score']
         if self.role == "guardian":
-            return "Approved" if soul_data['score'] > 70 else "Blocked: Low soul"
+            return "Approved" if score > 70 else f"Blocked: Low soul ({score})"
         elif self.role == "ethics":
-            return "Compliant" if not PII_REGEX.search(code) else "Violation: PII"
+            return "Compliant" if not PII_REGEX.search(code) else "Violation: Sensitive data"
         elif self.role == "refactor":
-            return humanize_code(code) if soul_data['score'] < 50 else code  # Auto-humanize low souls
-        return code
+            return "Humanized needed" if score < 50 else "Good as-is"
+        return "Neutral"
 
-def swarm_process(code: str) -> Dict[str, Any]:
-    parsed = secure_parse(code)
-    if not parsed:
-        return {"error": "Failed security check"}
-    
-    soul_data = calculate_soul_score(parsed)
+def swarm_vote(code: str, soul_data: Dict) -> Dict[str, str]:
     agents = [Agent("guardian"), Agent("ethics"), Agent("refactor")]
-    results = {a.role: a.process(parsed, soul_data) for a in agents}
-    
-    # Vote: Majority approve?
-    approvals = sum(1 for v in results.values() if "Approved" in v or "Compliant" in v)
-    if approvals < 2:
-        return {"error": "Swarm veto"}
-    
-    humanized = results.get("refactor", parsed)
-    proof = generate_zk_proof(humanized, soul_data['score'])
-    
-    return {
-        "soul_score": soul_data,
-        "humanized_code": humanized,
-        "zk_proof": proof,
-        "agent_results": results
-    }
+    results = {a.role: a.vote(code, soul_data) for a in agents}
+    approvals = sum(1 for v in results.values() if "Approved" in v or "Compliant" in v or "Good" in v)
+    return {"votes": results, "consensus": "Approved" if approvals >= 2 else "Vetoed"}
 
-# Enterprise API (Flask for deployment - Docker/K8s ready)
-app = Flask(__name__)
-limiter = Limiter(get_remote_address, app=app, default_limits=["100 per day", "10 per hour"])
+def generate_zk_proof_stub(soul_score: int, passed_checks: bool) -> Dict:
+    # Real ZK later (circom/halo2); stub for now
+    if passed_checks and soul_score > 70:
+        return {"status": "Proof generated", "message": "ZK-SNARK proves: soul >70, no PII, no injections"}
+    else:
+        return {"status": "Failed", "message": "Ethics/verification conditions not met"}
 
-def authenticate(token: str) -> bool:
+def process_code(code: str, persona: str = "2am_dev_rage"):
     try:
-        jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        return True
-    except:
-        return False
-
-@app.route('/vata/process', methods=['POST'])
-@limiter.limit("5 per minute")  # Rate limit
-def process_code():
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not authenticate(auth_header.split()[1]):
-        return jsonify({"error": "Unauthorized"}), 401
+        parsed = secure_parse(code)
+        if not parsed:
+            return "Error: Input empty or invalid", "", "", "", ""
+        
+        soul_data = calculate_soul_score(parsed)
+        swarm = swarm_vote(parsed, soul_data)
+        
+        if swarm["consensus"] == "Vetoed":
+            return (
+                f"Soul Score: {soul_data['score']}/100 (Blocked by swarm)",
+                json.dumps(soul_data['breakdown'], indent=2),
+                "Blocked: Failed agent consensus or security check",
+                json.dumps(swarm["votes"], indent=2),
+                "No proof - ethics not satisfied"
+            )
+        
+        humanized = humanize_code(parsed, persona)
+        proof = generate_zk_proof_stub(soul_data['score'], True)
+        
+        return (
+            f"Soul Score: {soul_data['score']}/100 - {'Human-like!' if soul_data['score'] > 70 else 'Soulless AI vibes'}",
+            json.dumps(soul_data['breakdown'], indent=2),
+            humanized,
+            json.dumps(swarm["votes"], indent=2),
+            json.dumps(proof, indent=2)
+        )
     
-    data = request.json
-    code = data.get('code')
-    persona = data.get('persona', "2am_dev_rage")
-    
-    if not code:
-        return jsonify({"error": "No code provided"}), 400
-    
-    logger.info(f"Processing code (len: {len(code)})")
-    result = swarm_process(code)
-    return jsonify(result)
+    except ValueError as e:
+        logger.error(f"Security block: {str(e)}")
+        return f"Blocked: {str(e)}", "", "", "", ""
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        return "Internal error - check logs", "", "", "", ""
 
-if __name__ == '__main__':
-    # For local dev - In prod, use gunicorn + nginx + HTTPS
-    app.run(debug=True, port=5000)
+# Gradio Interface
+with gr.Blocks(title="🜆 Vata Soul Check - Enterprise Guardian") as demo:
+    gr.Markdown("""
+    # 🜆 Project Vata - Soul Detection & Ethical Guardian
+    Detects **human soul** in code (vs sterile AI output), blocks dangers/PII, humanizes with personality, 
+    uses agent swarm voting, and stubs ZK-verifiable ethics proofs.
+    
+    **Try it**: Paste code → get score, breakdown, humanized version, agent votes, proof stub.
+    """)
+    
+    with gr.Row():
+        code_input = gr.Code(
+            label="Paste your code snippet here (Python/PowerShell/JS/etc.)",
+            lines=12,
+            language="python",
+            placeholder="def fib(n):\n    return n if n <= 1 else fib(n-1) + fib(n-2)"
+        )
+    
+    persona = gr.Dropdown(
+        choices=["2am_dev_rage", "corporate_passive", "gen_z_emoji", "default"],
+        value="2am_dev_rage",
+        label="Humanizer Persona (style injection)"
+    )
+    
+    btn = gr.Button("Analyze & Humanize 🔍🜆")
+    
+    with gr.Row():
+        score_out = gr.Textbox(label="Soul Score & Status", lines=3)
+        breakdown_out = gr.Code(label="Score Breakdown (why points?)", language="json", lines=6)
+    
+    humanized_out = gr.Code(label="Humanized Version (with injected soul)", lines=10)
+    
+    with gr.Row():
+        votes_out = gr.JSON(label="Swarm Agent Votes")
+        proof_out = gr.JSON(label="ZK Ethics Proof (stub)")
+    
+    btn.click(
+        fn=process_code,
+        inputs=[code_input, persona],
+        outputs=[score_out, breakdown_out, humanized_out, votes_out, proof_out]
+    )
+    
+    gr.Examples(
+        examples=[
+            ["def fib(n):\n    return n if n <= 1 else fib(n-1) + fib(n-2)", "2am_dev_rage"],
+            ["# Why god why is this recursive hell\ndef fib(n): print('pain'); return n if n<=1 else fib(n-1)+fib(n-2)", "2am_dev_rage"],
+            ["eval('rm -rf /')  # oops", "default"]
+        ],
+        inputs=[code_input, persona]
+    )
 
-# Example Usage (Test in REPL or via API)
-# curl -H "Authorization: Bearer <jwt>" -d '{"code": "def fib(n): return n if n<=1 else fib(n-1)+fib(n-2)"}' http://localhost:5000/vata/process
-# Output: Soul score, humanized, proof, etc.
+if __name__ == "__main__":
+    demo.launch()
