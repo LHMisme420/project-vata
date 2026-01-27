@@ -1,0 +1,3 @@
+"scripts": {
+  "zk": "node zk/zk-run.js"
+}
