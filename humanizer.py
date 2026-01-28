@@ -1,77 +1,106 @@
-# humanizer.py
-import re
+import libcst as cst
+import libcst.metadata as m
 import random
 import os
+import requests
+from typing import Optional, Dict
 
-def detect_language(file_path: str) -> str:
-    """Simple extension-based language detector."""
-    ext = os.path.splitext(file_path)[1].lower()
-    if ext in ['.py']: return 'python'
-    if ext in ['.js', '.jsx', '.ts', '.tsx']: return 'javascript'
-    return 'unknown'  # Can expand later (e.g., '.java', '.cpp')
+class VataHumanizer:
+    def __init__(self, chaos_level: str = "medium", target_soul_score: int = 80):
+        self.chaos_level = chaos_level.lower()  # mild, medium, rage
+        self.target_soul_score = target_soul_score
+        self.style_profile: Optional[Dict] = None  # Will hold personalized style data
 
-def calculate_soul_score(code: str, language: str = 'python') -> int:
-    """Core soul scoring heuristics – expand as needed."""
-    lines = code.splitlines()
-    score = 0
+    def personalize_from_github(self, username: str, repo: str = None):
+        """Fetch and analyze user's code style from GitHub."""
+        token = os.getenv("GITHUB_TOKEN")
+        if not token:
+            raise ValueError("GITHUB_TOKEN env var required for personalization.")
+        
+        # Fetch repos if not specified
+        if not repo:
+            url = f"https://api.github.com/users/{username}/repos"
+            headers = {"Authorization": f"token {token}"}
+            repos = requests.get(url, headers=headers).json()
+            if repos:
+                repo = repos[0]["name"]  # Use first repo as default
+        
+        # Fetch Python files from repo (simplified: grab one file for MVP)
+        url = f"https://api.github.com/repos/{username}/{repo}/contents"
+        files = requests.get(url, headers=headers).json()
+        py_files = [f for f in files if f["name"].endswith(".py")]
+        if not py_files:
+            raise ValueError("No Python files found in repo.")
+        
+        # Download a sample file
+        sample_url = py_files[0]["download_url"]
+        code = requests.get(sample_url).text
+        
+        # Analyze style (simple metrics for MVP)
+        self.style_profile = {
+            "var_naming": self._detect_naming_style(code),  # e.g., snake_case, camelCase
+            "comment_freq": code.count("#") / code.count("\n") if code.count("\n") else 0,
+            "preferred_constructs": self._detect_constructs(code),  # e.g., loops vs comprehensions
+        }
+        return self.style_profile
 
-    # Comment density (higher = more human)
-    comment_prefix = '#' if language == 'python' else '//'
-    comment_count = sum(1 for line in lines if line.strip().startswith(comment_prefix))
-    score += min(int(comment_count / max(1, len(lines)) * 60), 60)
+    def _detect_naming_style(self, code: str) -> str:
+        # Placeholder: regex to detect snake_case vs camelCase (expand later)
+        import re
+        snake = len(re.findall(r"[a-z]+_[a-z]+", code))
+        camel = len(re.findall(r"[a-z][A-Z]", code))
+        return "snake_case" if snake > camel else "camel_case"
 
-    # Debug statements
-    debug_kws = ['print(', 'console.log(', 'console.debug(', 'debugger;']
-    debug_count = sum(1 for line in lines if any(kw in line for kw in debug_kws))
-    score += min(debug_count * 8, 25)
+    def _detect_constructs(self, code: str) -> Dict:
+        # Count loops vs comprehensions
+        return {
+            "uses_comprehensions": "comprehension" in code,
+            "uses_loops": "for " in code or "while " in code,
+        }
 
-    # Personal markers (TODO, FIXME, HACK, NOTE)
-    markers = len(re.findall(r'(TODO|FIXME|HACK|NOTE):?', code, re.IGNORECASE))
-    score += min(markers * 10, 30)
+    def humanize(self, code_str: str) -> str:
+        """Main humanization function."""
+        # Parse to AST
+        tree = cst.parse_module(code_str)
+        wrapper = m.MetadataWrapper(tree)
+        
+        # Apply transformations based on chaos level and style
+        transformed = self._apply_chaos(wrapper.module)
+        
+        # Convert back to string
+        humanized_code = transformed.code
+        
+        # Self-test loop: Re-score and iterate if needed (up to 3 tries)
+        for _ in range(3):
+            score = self._get_soul_score(humanized_code)  # Replace with your actual scorer
+            if score >= self.target_soul_score:
+                break
+            humanized_code = self._add_more_chaos(humanized_code)
+        
+        return humanized_code
 
-    # Messiness: inconsistent indentation, blank lines
-    indents = [len(line) - len(line.lstrip()) for line in lines if line.strip()]
-    indent_variety = len(set(indents)) if indents else 0
-    blank_lines = sum(1 for line in lines if not line.strip())
-    score += 15 if indent_variety > 3 else 0
-    score += min(blank_lines // 5 * 5, 15)
+    def _apply_chaos(self, module: cst.Module) -> cst.Module:
+        # Transformer class for AST modifications
+        class ChaosTransformer(cst.CSTTransformer):
+            def leave_FunctionDef(self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef) -> cst.FunctionDef:
+                # Add random TODO comment
+                if random.random() > 0.5:
+                    todo = cst.SimpleStatementLine(body=[cst.Expr(value=cst.SimpleString(value='"# TODO: Optimize this crap"'))])
+                    updated_node = updated_node.with_changes(body=updated_node.body.with_changes(body=[todo] + list(updated_node.body.body)))
+                return updated_node
+        
+        # Apply transformer
+        return module.visit(ChaosTransformer())
 
-    # Quirky/overly-descriptive variables (heuristic: long names, caps, underscores mix)
-    var_patterns = r'(def|let|const|var)\s+([a-zA-Z_][a-zA-Z0-9_]*)\b'
-    vars_found = re.findall(var_patterns, code)
-    quirky = sum(1 for _, name in vars_found if len(name) > 15 or name.isupper() or '_' in name and name[0].isupper())
-    score += min(quirky * 5, 20)
+    def _add_more_chaos(self, code_str: str) -> str:
+        # Incremental chaos: Add typos, renames, etc.
+        lines = code_str.split("\n")
+        for i in range(len(lines)):
+            if random.random() < 0.1:  # 10% chance per line
+                lines[i] += "  # WTF why does this work?"
+        return "\n".join(lines)
 
-    return min(max(score, 0), 100)
-
-def humanize_code(code: str, language: str = 'python', intensity: float = 0.7) -> str:
-    """Inject human artifacts. Intensity 0.0–1.0 controls how aggressive."""
-    lines = code.splitlines()
-    new_lines = []
-
-    comment_style = '#' if language == 'python' else '//'
-    debug_stmt = 'print("debug point")' if language == 'python' else 'console.log("debug here");'
-
-    for i, line in enumerate(lines):
-        new_lines.append(line)
-
-        # Inject comments every ~4-8 lines
-        if random.random() < intensity * 0.25 and i % random.randint(4, 8) == 0:
-            comments = [
-                f"{comment_style} TODO: maybe optimize later",
-                f"{comment_style} HACK: this works but ugly af",
-                f"{comment_style} NOTE: borrowed from old project"
-            ]
-            new_lines.append(random.choice(comments))
-
-        # Add debug occasionally
-        if random.random() < intensity * 0.15 and 'function' in line.lower() or 'def ' in line:
-            new_lines.append('    ' + debug_stmt)  # Indent roughly
-
-    # Occasionally mess up indentation slightly
-    if random.random() < intensity * 0.1:
-        for j in range(len(new_lines)):
-            if random.random() < 0.05:
-                new_lines[j] = ' ' + new_lines[j]  # Add extra space
-
-    return '\n'.join(new_lines)
+    def _get_soul_score(self, code_str: str) -> int:
+        # Placeholder: Integrate your actual Vata scorer here
+        from vata_scorer import calculate_soul_score  # Assuming your existing module
+        return calculate_soul_score(code_str)
