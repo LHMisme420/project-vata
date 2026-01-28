@@ -1,15 +1,15 @@
-# test_humanizer_standalone.py - simple test runner
+# test_humanizer_standalone.py
 
-print("Starting humanizer test...")
+print("TEST START ───────────────────────────────────────")
 
 try:
     from humanizer import VataHumanizer
-    print("Imported VataHumanizer OK")
-except ImportError as e:
+    print("Import OK")
+except Exception as e:
     print("Import failed:", e)
     exit(1)
 
-ai_code = """
+code = """
 def factorial(n):
     if n == 0:
         return 1
@@ -18,20 +18,19 @@ def factorial(n):
 print(factorial(6))  # should print 720
 """
 
-humanizer = VataHumanizer(chaos_level="rage", target_soul_score=70)
+print("\nOriginal:")
+print(code.strip())
+print("─" * 60)
 
-print("\nOriginal code:")
-print(ai_code.strip())
-print("-" * 60)
+humanizer = VataHumanizer(chaos_level="rage", target_soul_score=65)
 
 try:
-    humanized = humanizer.humanize(ai_code)
-    print("\nHumanized code:")
-    print(humanized.strip())
-    print("-" * 60)
-    score = humanizer._get_soul_score(humanized)
-    print(f"Soul score: {score}")
+    result = humanizer.humanize(code)
+    print("\nHumanized:")
+    print(result.strip())
+    print("─" * 60)
+    print("Soul score:", humanizer._get_soul_score(result))
 except Exception as e:
-    print("Humanization crashed:")
+    print("Humanize failed:")
     import traceback
     traceback.print_exc()
