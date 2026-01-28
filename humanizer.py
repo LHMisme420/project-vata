@@ -4,6 +4,8 @@ import random
 import os
 import requests
 from typing import Optional, Dict
+import sys
+from io import StringIO
 
 class VataHumanizer:
     def __init__(self, chaos_level: str = "medium", target_soul_score: int = 80):
@@ -72,49 +74,59 @@ class VataHumanizer:
         
         # Self-test loop: Re-score and iterate if needed (up to 3 tries)
         for _ in range(3):
-            score = self._get_soul_score(humanized_code)  # Replace with your actual scorer
+            score = self._get_soul_score(humanized_code)
             if score >= self.target_soul_score:
                 break
             humanized_code = self._add_more_chaos(humanized_code)
+        
+        # Semantic check (critical!)
+        if not self.verify_humanized(code_str, humanized_code):
+            # Fallback or error handling
+            # For MVP: raise error or return original with warning
+            raise ValueError(
+                "Humanization broke semantics! Original and humanized outputs differ.\n"
+                f"Original output: {self._get_output_preview(code_str)}\n"
+                f"Humanized output: {self._get_output_preview(humanized_code)}"
+            )
         
         return humanized_code
 
     def _apply_chaos(self, module: cst.Module) -> cst.Module:
         # Transformer class for AST modifications
         class ChaosTransformer(cst.CSTTransformer):
+            METADATA_DEPENDENCIES = (m.PositionProvider,)
+            
             def leave_FunctionDef(self, original_node: cst.FunctionDef, updated_node: cst.FunctionDef) -> cst.FunctionDef:
                 # Add random TODO comment
                 if random.random() > 0.5:
                     todo = cst.SimpleStatementLine(body=[cst.Expr(value=cst.SimpleString(value='"# TODO: Optimize this crap"'))])
                     updated_node = updated_node.with_changes(body=updated_node.body.with_changes(body=[todo] + list(updated_node.body.body)))
                 return updated_node
-        def _get_chaos_intensity(self) -> float:
+            
+            def leave_SimpleStatementLine(self, original_node: cst.SimpleStatementLine, updated_node: cst.SimpleStatementLine) -> cst.SimpleStatementLine:
+                intensity = self._get_chaos_intensity()  # Access via self (make it class method if needed)
+                if random.random() < intensity:
+                    # Add rage comment based on level
+                    comment = "# This is getting annoying" if intensity < 0.5 else "# Fuck this, it works for now"
+                    new_expr = cst.Expr(value=cst.SimpleString(value=f'"{comment}"'))
+                    return updated_node.with_changes(body=list(updated_node.body) + [new_expr])
+                return updated_node
+            
+            # Add more: e.g., variable renames
+            def leave_Name(self, original_node: cst.Name, updated_node: cst.Name) -> cst.Name:
+                if self.style_profile and random.random() < 0.1:
+                    if self.style_profile["var_naming"] == "snake_case":
+                        return updated_node.with_changes(value=updated_node.value.lower().replace(" ", "_"))
+                return updated_node
+        
+        # Apply transformer
+        return module.visit(ChaosTransformer())
+
+    def _get_chaos_intensity(self) -> float:
         if self.chaos_level == "mild": return 0.2
         elif self.chaos_level == "medium": return 0.5
         elif self.chaos_level == "rage": return 0.8
         else: raise ValueError("Invalid chaos level")
-
-    # Update ChaosTransformer to use intensity
-    class ChaosTransformer(cst.CSTTransformer):
-        METADATA_DEPENDENCIES = (m.PositionProvider,)
-
-        def leave_SimpleStatementLine(self, original_node: cst.SimpleStatementLine, updated_node: cst.SimpleStatementLine) -> cst.SimpleStatementLine:
-            intensity = self._get_chaos_intensity()  # Access via self (make it class method if needed)
-            if random.random() < intensity:
-                # Add rage comment based on level
-                comment = "# This is getting annoying" if intensity < 0.5 else "# Fuck this, it works for now"
-                new_expr = cst.Expr(value=cst.SimpleString(value=f'"{comment}"'))
-                return updated_node.with_changes(body=list(updated_node.body) + [new_expr])
-            return updated_node
-
-        # Add more: e.g., variable renames
-        def leave_Name(self, original_node: cst.Name, updated_node: cst.Name) -> cst.Name:
-            if self.style_profile and random.random() < 0.1:
-                if self.style_profile["var_naming"] == "snake_case":
-                    return updated_node.with_changes(value=updated_node.value.lower().replace(" ", "_"))
-            return updated_node    
-        # Apply transformer
-        return module.visit(ChaosTransformer())
 
     def _add_more_chaos(self, code_str: str) -> str:
         # Incremental chaos: Add typos, renames, etc.
@@ -128,3 +140,51 @@ class VataHumanizer:
         # Placeholder: Integrate your actual Vata scorer here
         from vata_scorer import calculate_soul_score  # Assuming your existing module
         return calculate_soul_score(code_str)
+
+    def verify_humanized(self, original_code: str, humanized_code: str) -> bool:
+        """
+        Execute original and humanized code in a sandbox and compare outputs.
+        Returns True if they produce the same result (basic semantic preservation check).
+        """
+        def safe_exec(code: str) -> str:
+            try:
+                # Sandboxed globals/locals
+                local_scope = {}
+                # Execute the code
+                exec(code, {}, local_scope)
+                
+                # For simple functions/scripts, look for common output patterns
+                # Customize this based on what your typical test code looks like
+                if "result" in local_scope:
+                    return str(local_scope["result"])
+                elif "print" in code:  # crude check for printed output
+                    # This is limited; for real use consider capturing stdout
+                    old_stdout = sys.stdout
+                    redirected_output = sys.stdout = StringIO()
+                    try:
+                        exec(code, {}, local_scope)
+                        return redirected_output.getvalue().strip()
+                    finally:
+                        sys.stdout = old_stdout
+                else:
+                    # Default: assume last expression or variable
+                    return str(local_scope.get(list(local_scope.keys())[-1], ""))
+            except Exception as e:
+                return f"ERROR: {str(e)}"
+        
+        original_output = safe_exec(original_code)
+        humanized_output = safe_exec(humanized_code)
+        
+        # For MVP: exact string match (can improve with fuzzy comparison later)
+        return original_output == humanized_output
+
+    # Optional helper for better error messages
+    def _get_output_preview(self, code: str) -> str:
+        try:
+            old_stdout = sys.stdout
+            output = sys.stdout = StringIO()
+            exec(code, {}, {})
+            sys.stdout = old_stdout
+            return output.getvalue().strip()[:100] + "..." if output.getvalue() else "No output"
+        except:
+            return "Execution failed"
