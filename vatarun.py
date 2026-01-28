@@ -1,5 +1,6 @@
 
 from vatahumanizer import detect_language, calculate_soul_score, humanize_code
+
 # In your scan/command handler (example structure)
 def handle_scan(args):
     file_path = args.file
