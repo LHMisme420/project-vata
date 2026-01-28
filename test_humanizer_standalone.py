@@ -10,7 +10,7 @@ class ChaosTransformer(cst.CSTTransformer):
     """
     CST Transformer that applies chaotic, human-like modifications to code.
     """
-    def __init__(
+    def __init__(self.style_profile = {}
         self,
         chaos_level: str = "medium",
         personalize_from: Optional[str] = None,
