@@ -66,4 +66,6 @@ def fib(n):
     if n <= 1:
         return n
     return fib(n-1) + fib(n-2)
-
+## Security & Trust
+- [Security Policy](SECURITY.md) – How to report issues
+- [Threat Model](docs/threat-model.md) – What could go wrong & how we handle it
