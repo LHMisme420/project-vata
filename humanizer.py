@@ -88,7 +88,31 @@ class VataHumanizer:
                     todo = cst.SimpleStatementLine(body=[cst.Expr(value=cst.SimpleString(value='"# TODO: Optimize this crap"'))])
                     updated_node = updated_node.with_changes(body=updated_node.body.with_changes(body=[todo] + list(updated_node.body.body)))
                 return updated_node
-        
+        def _get_chaos_intensity(self) -> float:
+        if self.chaos_level == "mild": return 0.2
+        elif self.chaos_level == "medium": return 0.5
+        elif self.chaos_level == "rage": return 0.8
+        else: raise ValueError("Invalid chaos level")
+
+    # Update ChaosTransformer to use intensity
+    class ChaosTransformer(cst.CSTTransformer):
+        METADATA_DEPENDENCIES = (m.PositionProvider,)
+
+        def leave_SimpleStatementLine(self, original_node: cst.SimpleStatementLine, updated_node: cst.SimpleStatementLine) -> cst.SimpleStatementLine:
+            intensity = self._get_chaos_intensity()  # Access via self (make it class method if needed)
+            if random.random() < intensity:
+                # Add rage comment based on level
+                comment = "# This is getting annoying" if intensity < 0.5 else "# Fuck this, it works for now"
+                new_expr = cst.Expr(value=cst.SimpleString(value=f'"{comment}"'))
+                return updated_node.with_changes(body=list(updated_node.body) + [new_expr])
+            return updated_node
+
+        # Add more: e.g., variable renames
+        def leave_Name(self, original_node: cst.Name, updated_node: cst.Name) -> cst.Name:
+            if self.style_profile and random.random() < 0.1:
+                if self.style_profile["var_naming"] == "snake_case":
+                    return updated_node.with_changes(value=updated_node.value.lower().replace(" ", "_"))
+            return updated_node    
         # Apply transformer
         return module.visit(ChaosTransformer())
 
