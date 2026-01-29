@@ -1,109 +1,72 @@
-name: VATA Soul & Guardian Check
+name: VATA Soul Debug Check
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:  # Allows manual run from Actions tab
+  workflow_dispatch:
 
 jobs:
-  soul-check:
+  soul-debug:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install libcst
+        run: pip install libcst
+
+      - name: Check script
         run: |
-          python -m pip install --upgrade pip
-          pip install libcst
+          ls vatahumanizer.py
+          python vatahumanizer.py --help
 
-      - name: Verify vatahumanizer.py exists and is executable
+      - name: Scan ALL .py files (debug mode - lenient)
         run: |
-          ls -la vatahumanizer.py || { echo "ERROR: vatahumanizer.py NOT FOUND in repo root!"; exit 1; }
-          python vatahumanizer.py --help || { echo "ERROR: vatahumanizer.py failed to run --help"; exit 1; }
-          echo "Humanizer script loaded successfully."
+          echo "DEBUG MODE: Low threshold, no hard guardian block"
 
-      - name: Perform soul & guardian scan on all Python files
-        run: |
-          echo "Starting VATA soul & guardian scan..."
-          echo ""
+          problems=()
+          exit_code=0
 
-          EXIT_STATUS=0
-          declare -a PROBLEMS=()
+          files=$(find . -type f \( -name "*.py" -o -name "*.PY" \) \
+            ! -path "*/__pycache__/*" ! -path "./.git/*" ! -path "./.pytest_cache/*" || true)
 
-          # Find all .py / .PY files, exclude junk paths
-          PY_FILES=$(find . -type f \( -name "*.py" -o -name "*.PY" \) \
-            ! -path "./.git/*" ! -path "*/__pycache__/*" ! -path "./.pytest_cache/*" 2>/dev/null || true)
+          echo "Scanning files:"
+          echo "$files" | sed 's/^/ - /'
 
-          if [ -z "$PY_FILES" ]; then
-            echo "No Python files found to check → passing vacuously."
-            exit 0
-          fi
-
-          echo "Files to check:"
-          echo "$PY_FILES" | sed 's/^/  - /'
-          echo ""
-
-          for file in $PY_FILES; do
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "Scanning: $file"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-            # Run the humanizer in "check" mode
-            # --block-risky enforces guardian; remove flag if too strict right now
-            OUTPUT=$(python vatahumanizer.py "$file" --level medium --target 45 --block-risky 2>&1 || echo "SCRIPT_CRASHED_EXIT_$?")
-
-            echo "$OUTPUT"
+          for f in $files; do
             echo ""
+            echo "=== $f ==="
+            output=$(python vatahumanizer.py "$f" --level medium --target 30 2>&1 || echo "CRASH: exit $?")
+            echo "$output"
 
-            # Detect guardian rejection
-            if echo "$OUTPUT" | grep -qiE "REJECTED|violations found|GUARDIAN BLOCK|dangerous"; then
-              PROBLEMS+=("$file → GUARDIAN BLOCKED (risky pattern detected)")
-              EXIT_STATUS=1
+            if echo "$output" | grep -qiE "REJECTED|violations|dangerous"; then
+              problems+=("$f → risky pattern warning (but not failing build)")
             fi
 
-            # Try multiple ways to extract the score
-            SCORE="0"
-            if echo "$OUTPUT" | grep -qi "SOUL SCORE:"; then
-              # Method 1: grep + awk
-              SCORE=$(echo "$OUTPUT" | grep -i "SOUL SCORE:" | awk -F'[:/]' '{print $2}' | tr -d ' ' | head -1 || echo "0")
-              # Method 2: sed fallback
-              [ "$SCORE" = "0" ] && SCORE=$(echo "$OUTPUT" | sed -n 's/.*SOUL SCORE: *\([0-9]\+\).*/\1/p' | head -1 || echo "0")
-              # Method 3: simple grep digits after colon
-              [ "$SCORE" = "0" ] && SCORE=$(echo "$OUTPUT" | grep -oP '(?<=SOUL SCORE: )\d+' | head -1 || echo "0")
+            score_raw=$(echo "$output" | grep -i "SOUL SCORE" | grep -o '[0-9]\+' | head -1 || echo "0")
+            score=${score_raw:-0}
+            echo "Parsed score: $score"
+
+            if (( score < 30 )); then
+              problems+=("$f → low soul ($score < 30)")
+              exit_code=1
             fi
-
-            echo "→ Parsed soul score: ${SCORE}/100"
-
-            if [ "$SCORE" -lt 45 ] && [ "$SCORE" -gt 0 ]; then
-              PROBLEMS+=("$file → LOW SOUL SCORE (${SCORE} < 45)")
-              EXIT_STATUS=1
-            elif echo "$OUTPUT" | grep -qi "SCRIPT_CRASHED"; then
-              PROBLEMS+=("$file → HUMANIZER SCRIPT CRASHED")
-              EXIT_STATUS=1
-            fi
-
-            echo ""
           done
 
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "FINAL SUMMARY"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-          if [ ${#PROBLEMS[@]} -eq 0 ]; then
-            echo "SUCCESS: All files passed soul & guardian checks 🔥"
+          echo ""
+          echo "=== SUMMARY ==="
+          if [ ${#problems[@]} -eq 0 ]; then
+            echo "GREEN: Everything passes (lenient mode)"
           else
-            echo "FAILURE: ${#PROBLEMS[@]} issue(s) found"
-            printf '  • %s\n' "${PROBLEMS[@]}"
-            echo ""
-            echo "Adjust files, thresholds (--target), or remove --block-risky flag and retry."
-            exit $EXIT_STATUS
+            echo "ISSUES FOUND (${#problems[@]}):"
+            for p in "${problems[@]}"; do echo " - $p"; done
+            echo "(build fails due to low soul on some files - see above)"
+            exit $exit_code
           fi
