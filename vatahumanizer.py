@@ -210,3 +210,16 @@ def humanize_file_result(
     extra: Optional[Dict[str, Any]] = None,
 ) -> str:
     return default_humanizer.humanize_file_result(path, scores, extra or {})
+if __name__ == "__main__":
+    import sys
+    import random
+
+    # Accept a filename but ignore it for now
+    path = sys.argv[1] if len(sys.argv) > 1 else "<unknown>"
+
+    # Temporary deterministic placeholder score
+    # Replace with real scoring later
+    soul_score = 80
+
+    print(f"FILE: {path}")
+    print(f"SOUL SCORE: {soul_score}")
