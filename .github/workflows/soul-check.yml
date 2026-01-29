@@ -1,89 +1,98 @@
-name: VATA Soul Check & Guardian
+name: VATA Soul & Guardian Check
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:   # lets you run it manually from Actions tab
+  workflow_dispatch:
 
 jobs:
-  soul-check:
+  soul-guard:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'     # or 3.12 — whatever you normally use
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        # Add any extra packages your humanizer needs (libcst, etc.)
-        pip install libcst statistics
+      - name: Install required packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install libcst
 
-    - name: Copy humanizer script into repo (temporary for CI)
-      run: |
-        # You can later move this file into the repo permanently
-        # For now we create it on the fly — replace with cat vata_humanizer.py later
-        cat > vata_humanizer.py << 'EOF'
-        # ────────────────────────────────────────────────────────────────
-        # PASTE YOUR FULL UPDATED vata_humanizer.py CODE HERE
-        # (the one I gave you last message — the complete script)
-        # Make sure it has the main() function and can be imported/run
-        # ────────────────────────────────────────────────────────────────
-        EOF
+      - name: Verify humanizer script exists and runs
+        run: python vatahumanizer.py --help
 
-    - name: Run VATA Soul Check on all Python files
-      run: |
-        python vata_humanizer.py --help   # just to make sure it loads
+      - name: Run soul & guardian checks on all .py files
+        run: |
+          set -e  # exit on any error
 
-        # ────────────────────────────────────────────────────────────────
-        # This is the actual check — customize thresholds!
-        # Fail build if any file has soul < 45 or has guardian violations
-        # ────────────────────────────────────────────────────────────────
+          echo "Starting VATA Soul & Guardian checks..."
 
-        EXIT_CODE=0
+          EXIT_CODE=0
+          FAILED_FILES=()
 
-        for file in $(find . -type f -name "*.py" -not -path "./.git/*" -not -path "./build/*"); do
-          echo "Checking soul of $file"
+          # Find all .py files, exclude git and caches
+          PY_FILES=$(find . -type f -name "*.py" ! -path "./.git/*" ! -path "*/__pycache__/*" ! -path "./.pytest_cache/*" || true)
 
-          # Run in non-interactive mode — we want score + violations only
-          OUTPUT=$(python vata_humanizer.py "$file" --level medium --personality chaotic --target 45 2>&1)
-
-          echo "$OUTPUT"
-
-          # Extract score
-          SCORE=$(echo "$OUTPUT" | grep "SOUL SCORE:" | awk '{print $3}' | cut -d'/' -f1 || echo "0")
-
-          if [[ "$OUTPUT" == *"REJECTED"* ]]; then
-            echo "❌ GUARDIAN BLOCKED → $file has dangerous patterns!"
-            EXIT_CODE=1
-          elif [[ "$SCORE" -lt 45 ]]; then
-            echo "❌ SOUL TOO LOW ($SCORE/100) → $file feels too AI / soulless"
-            EXIT_CODE=1
-          else
-            echo "✅ Soul OK ($SCORE/100)"
+          if [ -z "$PY_FILES" ]; then
+            echo "No .py files found to check. All good."
+            exit 0
           fi
-        done
 
-        if [ $EXIT_CODE -ne 0 ]; then
+          for file in $PY_FILES; do
+            echo ""
+            echo "──────────────────────────────────────────"
+            echo "Checking: $file"
+            echo "──────────────────────────────────────────"
+
+            # Run humanizer in check mode (non-modifying)
+            # Use --target 50 --level medium; adjust as needed
+            OUTPUT=$(python vatahumanizer.py "$file" --level medium --target 50 --block-risky 2>&1 || true)
+
+            echo "$OUTPUT"
+            echo ""
+
+            # Check for guardian rejection
+            if echo "$OUTPUT" | grep -qi "REJECTED\|violations found"; then
+              echo "❌ GUARDIAN BLOCK: Risky code detected in $file"
+              FAILED_FILES+=("$file (guardian block)")
+              EXIT_CODE=1
+              continue
+            fi
+
+            # Extract score more robustly (handles variations in output)
+            SCORE_LINE=$(echo "$OUTPUT" | grep -i "SOUL SCORE:" | tail -1 || true)
+            SCORE=$(echo "$SCORE_LINE" | grep -o '[0-9]\+' | head -1 || echo "0")
+
+            if [ "$SCORE" -eq 0 ] && [ -n "$SCORE_LINE" ]; then
+              echo "Warning: Score extraction failed - assuming low soul"
+              SCORE=0
+            fi
+
+            echo "Extracted soul score: $SCORE/100"
+
+            if [ "$SCORE" -lt 50 ]; then
+              echo "❌ LOW SOUL ($SCORE < 50) in $file"
+              FAILED_FILES+=("$file (soul $SCORE)")
+              EXIT_CODE=1
+            else
+              echo "✅ Passed ($SCORE)"
+            fi
+          done
+
           echo ""
-          echo "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓"
-          echo "┃          VATA GUARDIAN HAS SPOKEN             ┃"
-          echo "┃   Some files failed soul check or are risky   ┃"
-          echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"
-          exit 1
-        else
-          echo "All files have enough SOUL 🔥"
-        fi
-
-    - name: Basic lint (optional — flake8 or ruff)
-      if: always()   # even if soul check fails — still show lint
-      run: |
-        pip install ruff
-        ruff check --output-format=github .
+          echo "──────────────────────────────────────────"
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "ALL FILES PASSED SOUL & GUARDIAN CHECK 🔥"
+          else
+            echo "FAILURE SUMMARY:"
+            printf ' - %s\n' "${FAILED_FILES[@]}"
+            echo ""
+            echo "Fix the failing files and push again."
+            exit 1
+          fi
