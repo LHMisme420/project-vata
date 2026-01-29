@@ -1,0 +1,89 @@
+name: VATA Soul Check & Guardian
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:   # lets you run it manually from Actions tab
+
+jobs:
+  soul-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'     # or 3.12 — whatever you normally use
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # Add any extra packages your humanizer needs (libcst, etc.)
+        pip install libcst statistics
+
+    - name: Copy humanizer script into repo (temporary for CI)
+      run: |
+        # You can later move this file into the repo permanently
+        # For now we create it on the fly — replace with cat vata_humanizer.py later
+        cat > vata_humanizer.py << 'EOF'
+        # ────────────────────────────────────────────────────────────────
+        # PASTE YOUR FULL UPDATED vata_humanizer.py CODE HERE
+        # (the one I gave you last message — the complete script)
+        # Make sure it has the main() function and can be imported/run
+        # ────────────────────────────────────────────────────────────────
+        EOF
+
+    - name: Run VATA Soul Check on all Python files
+      run: |
+        python vata_humanizer.py --help   # just to make sure it loads
+
+        # ────────────────────────────────────────────────────────────────
+        # This is the actual check — customize thresholds!
+        # Fail build if any file has soul < 45 or has guardian violations
+        # ────────────────────────────────────────────────────────────────
+
+        EXIT_CODE=0
+
+        for file in $(find . -type f -name "*.py" -not -path "./.git/*" -not -path "./build/*"); do
+          echo "Checking soul of $file"
+
+          # Run in non-interactive mode — we want score + violations only
+          OUTPUT=$(python vata_humanizer.py "$file" --level medium --personality chaotic --target 45 2>&1)
+
+          echo "$OUTPUT"
+
+          # Extract score
+          SCORE=$(echo "$OUTPUT" | grep "SOUL SCORE:" | awk '{print $3}' | cut -d'/' -f1 || echo "0")
+
+          if [[ "$OUTPUT" == *"REJECTED"* ]]; then
+            echo "❌ GUARDIAN BLOCKED → $file has dangerous patterns!"
+            EXIT_CODE=1
+          elif [[ "$SCORE" -lt 45 ]]; then
+            echo "❌ SOUL TOO LOW ($SCORE/100) → $file feels too AI / soulless"
+            EXIT_CODE=1
+          else
+            echo "✅ Soul OK ($SCORE/100)"
+          fi
+        done
+
+        if [ $EXIT_CODE -ne 0 ]; then
+          echo ""
+          echo "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓"
+          echo "┃          VATA GUARDIAN HAS SPOKEN             ┃"
+          echo "┃   Some files failed soul check or are risky   ┃"
+          echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛"
+          exit 1
+        else
+          echo "All files have enough SOUL 🔥"
+        fi
+
+    - name: Basic lint (optional — flake8 or ruff)
+      if: always()   # even if soul check fails — still show lint
+      run: |
+        pip install ruff
+        ruff check --output-format=github .
