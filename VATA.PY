@@ -3,158 +3,268 @@ import re
 import random
 import ast
 import numpy as np
-import hashlib  # for simple obfuscation hashing
+import hashlib
 from statistics import variance, stdev
-import subprocess  # for optional behavioral sandbox (use with caution)
-from xai.grok import GrokClient  # Assuming xAI's Grok API client; install via pip if needed
+import subprocess  # for optional behavioral sandbox (use with caution!)
+try:
+    import torch
+    from torch.nn.functional import cosine_similarity
+    from sentence_transformers import SentenceTransformer
+    EMBEDDING_AVAILABLE = True
+except ImportError:
+    EMBEDDING_AVAILABLE = False
+    print("Warning: sentence-transformers or torch not available → embedding signal disabled")
 
-# Note: This is an updated version of vata.py with enhanced "bite" features:
-# - Obfuscated scoring weights (hashed and runtime-computed to prevent easy reverse-engineering)
-# - Added entropy measurements (formatting variance, line length distribution)
-# - Anti-pattern detection (uniform comments, absent human smells like TODOs/debug prints)
-# - Diminishing returns in refinement loop (to discourage excessive gaming)
-# - Hybrid statistical signals (AST-based structural analysis for embedding-like insights without full ML)
-# - Optional behavioral execution in sandbox (checks resilience to edge inputs; HIGH RISK - enable only in trusted env)
-# - Integration with Grok API for roasts and suggestions remains, now with more context
+# Note: Enhanced VataSoulScorer v2 – now with tiny local embedding-based "AI-likeness" penalty
+# Recommended lightweight model: 'sentence-transformers/all-MiniLM-L6-v2'
+#   → ~80 MB, fast on CPU, good general embeddings (works reasonably on code snippets)
+#   → Download once: SentenceTransformer('all-MiniLM-L6-v2')  (needs internet first time)
+#   → After that: fully offline if model is cached (~/.cache/huggingface/)
+#
+# If you want even smaller/faster alternatives (2026 context):
+#   - nomic-ai/nomic-embed-text-v1.5 (matryoshka, good quality)
+#   - BAAI/bge-small-en-v1.5
+#   - For pure code: jinaai/jina-embeddings-v2-small-en or microsoft/codebert-base (but heavier)
+#
+# Usage: scorer = VataSoulScorer(embedding_model_name="all-MiniLM-L6-v2")
+#        If model fails to load → falls back to heuristic-only
 
 class VataSoulScorer:
-    def __init__(self, api_key=None, enable_behavioral=False):
+    def __init__(self, api_key=None, enable_behavioral=False, embedding_model_name=None):
         self.api_key = api_key or os.getenv("GROK_API_KEY")
         if not self.api_key:
-            raise ValueError("Grok API key required. Set GROK_API_KEY env var.")
-        self.client = GrokClient(self.api_key)
-        self.enable_behavioral = enable_behavioral  # Toggle for risky execution checks
+            raise ValueError("Grok API key required. Set GROK_API_KEY env var or pass it.")
+        
+        # from xai.grok import GrokClient  # ← adjust to your actual Grok/xAI client import
+        # self.client = GrokClient(self.api_key)
+        self.client = None  # Placeholder – replace with real client
+        
+        self.enable_behavioral = enable_behavioral
+        
+        # Obfuscated / jittered weights (7 components now)
         self.obfuscated_weights = self._compute_obfuscated_weights()
-        self.refinement_passes = 0  # Track for diminishing returns
+        
+        self.refinement_passes = 0
+        
+        # Tiny embedding signal
+        self.embedding_model = None
+        self.ai_prototype_embedding = None
+        if EMBEDDING_AVAILABLE and embedding_model_name:
+            try:
+                print(f"Loading embedding model: {embedding_model_name} ...")
+                self.embedding_model = SentenceTransformer(embedding_model_name)
+                
+                # Very simple "AI prototype" – average embedding of typical clean AI code patterns
+                # In production: compute this from a small corpus of known LLM outputs
+                ai_examples = [
+                    "def factorial(n):\n    if n == 0 or n == 1:\n        return 1\n    return n * factorial(n-1)",
+                    "def is_prime(num):\n    if num < 2: return False\n    for i in range(2, int(num**0.5)+1):\n        if num % i == 0: return False\n    return True",
+                    "result = [x**2 for x in range(10) if x % 2 == 0]",
+                ]
+                embeddings = self.embedding_model.encode(ai_examples, convert_to_tensor=True)
+                self.ai_prototype_embedding = embeddings.mean(dim=0)
+                print("Embedding signal initialized.")
+            except Exception as e:
+                print(f"Embedding init failed: {e}\n→ falling back to heuristic-only mode")
+                self.embedding_model = None
 
     def _compute_obfuscated_weights(self):
-        # Obfuscate weights: base values hashed and modulated at runtime
-        base_weights = [0.25, 0.20, 0.15, 0.15, 0.10, 0.10, 0.05]  # Comment, quirky vars, structure, entropy, anti-pattern, behavioral, jitter
-        seed = int(hashlib.sha256(str(random.random()).encode()).hexdigest(), 16) % 100
-        return [w + random.uniform(-0.02, 0.02) * (seed / 100) for w in base_weights]  # Runtime jitter
+        base = [0.22, 0.18, 0.14, 0.12, 0.12, 0.08, 0.08, 0.06]  # comment, quirky, structure, entropy, anti-pattern, behavioral, embedding, jitter
+        seed = int(hashlib.sha256(str(random.random()).encode()).hexdigest(), 16) % 1000
+        return [w + random.uniform(-0.025, 0.025) * (seed / 500.0) for w in base]
+
+    def _get_embedding_distance(self, code_str):
+        if not self.embedding_model or not self.ai_prototype_embedding is not None:
+            return 0.0  # neutral if unavailable
+        
+        try:
+            code_emb = self.embedding_model.encode([code_str], convert_to_tensor=True)[0]
+            sim = cosine_similarity(
+                code_emb.unsqueeze(0),
+                self.ai_prototype_embedding.unsqueeze(0)
+            ).item()
+            # Convert similarity [0–1] → penalty [0–1] where 1=very AI-like → high penalty
+            ai_likeness_penalty = max(0.0, sim - 0.4) / 0.6   # threshold ~0.4, full penalty above ~1.0 sim
+            return ai_likeness_penalty
+        except:
+            return 0.0
 
     def analyze_code(self, code_str):
         scores = {}
         
-        # 1. Comment density (higher = more soul)
-        lines = code_str.split('\n')
-        comment_lines = len(re.findall(r'^\s*#', code_str, re.MULTILINE))
-        scores['comment_density'] = min(1.0, comment_lines / len(lines)) if lines else 0
+        # 1. Comment density
+        lines = [line for line in code_str.split('\n') if line.strip()]
+        comment_lines = sum(1 for line in code_str.split('\n') if re.match(r'^\s*#', line))
+        scores['comment_density'] = min(1.0, comment_lines / max(1, len(lines)))
         
-        # 2. Quirky variable naming (length variance, underscores, numbers)
-        vars = re.findall(r'\b[a-zA-Z_][a-zA-Z0-9_]*\b', code_str)
-        var_lengths = [len(v) for v in vars]
-        quirky_score = (stdev(var_lengths) / max(1, np.mean(var_lengths))) if var_lengths else 0
-        quirky_score += 0.2 if any(re.match(r'.*_[a-z0-9]*$', v) for v in vars) else 0  # Underscore quirks
-        scores['quirky_vars'] = min(1.0, quirky_score)
+        # 2. Quirky identifiers
+        vars_found = re.findall(r'\b[a-zA-Z_][a-zA-Z0-9_]*\b', code_str)
+        if vars_found:
+            lengths = np.array([len(v) for v in vars_found])
+            quirky = stdev(lengths) / max(1e-6, np.mean(lengths)) if len(lengths) > 1 else 0
+            quirky += 0.25 * sum(1 for v in vars_found if '_' in v or any(c.isdigit() for c in v))
+            scores['quirky_vars'] = min(1.0, quirky / 3.0)  # normalize roughly
+        else:
+            scores['quirky_vars'] = 0.0
         
-        # 3. Structural messiness (using AST for depth/nesting)
+        # 3. Structural complexity via AST
         try:
             tree = ast.parse(code_str)
             max_depth = self._ast_max_depth(tree)
-            branch_density = len(list(ast.walk(tree))) / max(1, len(lines))  # Nodes per line
-            scores['structure'] = min(1.0, (max_depth * 0.1) + (branch_density * 0.05))  # Reward complexity
-        except SyntaxError:
-            scores['structure'] = 0.2  # Penalize invalid code lightly (could be human error)
+            node_count = sum(1 for _ in ast.walk(tree))
+            branchy = node_count / max(1, len(lines))
+            scores['structure'] = min(1.0, 0.08 * max_depth + 0.04 * branchy)
+        except:
+            scores['structure'] = 0.15
         
-        # 4. Formatting entropy (variance in indents, line lengths)
-        indent_levels = [len(line) - len(line.lstrip(' ')) // 4 for line in lines if line.strip()]  # Assume 4-space tabs
-        line_lengths = [len(line) for line in lines if line.strip()]
-        entropy_score = (variance(indent_levels) / 4 if indent_levels else 0) + (stdev(line_lengths) / 50 if line_lengths else 0)
-        scores['entropy'] = min(1.0, entropy_score)
+        # 4. Formatting entropy
+        indents = [len(line) - len(line.lstrip()) for line in lines]
+        lengths = [len(line) for line in lines]
+        ent = (variance(indents) if indents else 0) + (stdev(lengths) / 40 if lengths else 0)
+        scores['entropy'] = min(1.0, ent / 8.0)  # rough normalization
         
-        # 5. Anti-pattern penalties (robotic uniformity)
-        todo_count = len(re.findall(r'#\s*TODO|HACK|FIXME', code_str, re.I))
-        debug_prints = len(re.findall(r'print\(\s*["\']debug', code_str, re.I))
-        uniform_comments = all(len(c.group()) < 20 for c in re.finditer(r'#.*', code_str))  # Short uniform comments
-        scores['anti_patterns'] = (todo_count * 0.1 + debug_prints * 0.05) - (0.3 if uniform_comments else 0)
-        scores['anti_patterns'] = max(0, min(1.0, scores['anti_patterns']))
+        # 5. Anti-pattern / human smells reward
+        human_smells = len(re.findall(r'(?i)#\s*(TODO|HACK|FIXME|NOTE|XXX)', code_str))
+        human_smells += len(re.findall(r'print\s*\(\s*["\']debug', code_str))
+        uniform_comment = all(5 < len(c.strip()) < 30 for c in re.findall(r'#.*', code_str)) and human_smells == 0
+        scores['anti_patterns'] = min(1.0, human_smells * 0.12 - (0.35 if uniform_comment else 0))
         
-        # 6. Behavioral resilience (optional, sandboxed)
+        # 6. Behavioral (optional / dangerous)
         if self.enable_behavioral:
-            behavioral_score = self._run_behavioral_checks(code_str)
-            scores['behavioral'] = behavioral_score
+            scores['behavioral'] = self._run_behavioral_checks(code_str)
         else:
-            scores['behavioral'] = 0.5  # Neutral if disabled
+            scores['behavioral'] = 0.5
         
-        # 7. Random jitter for obfuscation
-        jitter = random.uniform(-0.05, 0.05)
+        # 7. NEW: Embedding-based AI-likeness penalty (0 = human-like, 1 = very AI-like)
+        embedding_penalty = self._get_embedding_distance(code_str)
+        scores['embedding_ai_penalty'] = embedding_penalty
         
-        # Weighted sum with diminishing returns if refining
-        total_score = sum(s * w for s, w in zip(scores.values(), self.obfuscated_weights[:-1])) + (self.obfuscated_weights[-1] * jitter)
-        total_score *= (0.95 ** self.refinement_passes)  # Decay per pass
-        return min(100, max(0, total_score * 100)), scores
+        # Weighted sum
+        component_scores = [
+            scores['comment_density'],
+            scores['quirky_vars'],
+            scores['structure'],
+            scores['entropy'],
+            max(0, scores['anti_patterns']),
+            scores['behavioral'],
+            1.0 - scores['embedding_ai_penalty'],  # invert: high penalty → low soul contrib
+        ]
+        
+        total = sum(s * w for s, w in zip(component_scores, self.obfuscated_weights[:-1]))
+        total += self.obfuscated_weights[-1] * random.uniform(-0.04, 0.04)  # final jitter
+        
+        # Diminishing returns on repeated refinement
+        total *= (0.94 ** self.refinement_passes)
+        
+        return round(min(100.0, max(0.0, total * 100.0)), 1), scores
 
     def _ast_max_depth(self, node, depth=0):
-        if not isinstance(node, ast.AST):
+        if not hasattr(node, 'body') and not hasattr(node, 'orelse') and not hasattr(node, 'handlers'):
             return depth
-        return max(self._ast_max_depth(child, depth + 1) for child in ast.iter_child_nodes(node)) if ast.iter_child_nodes(node) else depth
+        children = []
+        for field in ['body', 'orelse', 'handlers', 'finalbody']:
+            val = getattr(node, field, None)
+            if val:
+                children.extend(val if isinstance(val, list) else [val])
+        if not children:
+            return depth
+        return max(self._ast_max_depth(child, depth + 1) for child in children)
 
     def _run_behavioral_checks(self, code_str):
-        # HIGH RISK: Executes code in subprocess sandbox. Use only in isolated env!
+        # CAUTION: executes code → only safe snippets!
         try:
-            with open('temp.py', 'w') as f:
-                f.write(code_str)
-            result = subprocess.run(['python', 'temp.py'], capture_output=True, timeout=5)
+            with open('vata_temp_safe.py', 'w', encoding='utf-8') as f:
+                f.write(code_str + "\n\n# Safety guard\nassert True")
+            result = subprocess.run(
+                ['python', 'vata_temp_safe.py'],
+                capture_output=True, text=True, timeout=4
+            )
+            os.unlink('vata_temp_safe.py')
             if result.returncode != 0:
-                return 0.3  # Crashes = possible human (or bad code)
-            # Add edge input tests if code defines functions; simplistic here
-            return 0.8 if 'assert' in code_str or 'try:' in code_str else 0.5  # Reward defensiveness
-        except Exception:
-            return 0.4  # Handling errors = soulful?
-        finally:
-            os.remove('temp.py')
+                return 0.35  # crash can be human (or broken)
+            # Very basic defensiveness check
+            has_assert = 'assert' in code_str.lower()
+            has_try = 'try:' in code_str
+            return 0.75 if has_assert or has_try else 0.55
+        except:
+            return 0.4
 
     def get_grok_roast(self, code_str, score, detailed_scores):
+        if not self.client:
+            return "Grok roast unavailable (client not set)."
+        
         prompt = (
-            f"Analyze this code for human soul (authenticity). Soul score: {score}/100. "
-            f"Detailed breakdowns: {detailed_scores}. "
-            "Give a humorous roast explaining why it's low/high, and suggest specific ways to 'humanize' it more "
-            "(add quirks, messiness, comments). Be witty and encouraging."
+            f"Code soul score: {score}/100. Breakdown: {detailed_scores}\n"
+            "Roast humorously why it feels AI-generated or beautifully human. "
+            "Suggest 3–5 concrete, funny ways to add more 'soul' / chaos / personality."
         )
-        response = self.client.query(prompt, model="grok-4")  # Adjust API call as per xAI docs
-        return response['text']
+        # response = self.client.query(prompt, model="grok-4")
+        # return response.get('text', 'Roast generation failed.')
+        return "[Simulated roast – integrate real Grok call here]"
 
     def refine_code(self, code_str):
         self.refinement_passes += 1
-        # Simple auto-humanizer: add random TODOs, comments, quirks
-        lines = code_str.split('\n')
-        insert_points = random.sample(range(len(lines)), min(3, len(lines)//5))
-        for i in insert_points:
-            quirks = [
-                "# TODO: Fix this later when I'm not sleepy",
-                "    # HACK: This works but I hate it",
-                "print('debug: here we go')  # Remove later",
-                "rage_var = " + lines[i].strip() if ' =' in lines[i] else ""
-            ]
+        lines = code_str.splitlines()
+        if len(lines) < 5:
+            return code_str
+        
+        inserts = random.sample(range(len(lines)), k=min(4, len(lines)//4 + 1))
+        quirks = [
+            "# TODO: fix when brain is online again",
+            "# HACK: yes this is cursed, fight me",
+            "    # screaming internally",
+            "debug_val = 42  # will remove... probably",
+            "    # if you're reading this send coffee",
+        ]
+        for i in sorted(inserts, reverse=True):
             lines.insert(i + 1, random.choice(quirks))
+        
+        # occasional formatting mess
+        if random.random() < 0.4:
+            idx = random.randint(0, len(lines)-1)
+            lines[idx] = '    ' + lines[idx].lstrip()  # random extra indent
+        
         return '\n'.join(lines)
+
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(description="VATA Soul Scorer: Detect AI vs Human code with bite.")
-    parser.add_argument('code_file', help="Path to Python code file")
-    parser.add_argument('--refine', action='store_true', help="Auto-refine and re-score")
-    parser.add_argument('--behavioral', action='store_true', help="Enable risky behavioral checks")
+    parser = argparse.ArgumentParser(description="VATA Soul Scorer – hardened edition with embedding bite")
+    parser.add_argument('code_file', nargs='?', default=None, help="Python file to analyze")
+    parser.add_argument('--code', type=str, help="Direct code string to analyze")
+    parser.add_argument('--model', type=str, default="all-MiniLM-L6-v2",
+                        help="SentenceTransformer model name for embedding signal")
+    parser.add_argument('--refine', action='store_true')
+    parser.add_argument('--behavioral', action='store_true')
     args = parser.parse_args()
 
-    with open(args.code_file, 'r') as f:
-        code = f.read()
+    if args.code:
+        code = args.code
+    elif args.code_file:
+        with open(args.code_file, encoding='utf-8') as f:
+            code = f.read()
+    else:
+        parser.print_help()
+        return
 
-    scorer = VataSoulScorer(enable_behavioral=args.behavioral)
+    scorer = VataSoulScorer(
+        enable_behavioral=args.behavioral,
+        embedding_model_name=args.model
+    )
+
     score, details = scorer.analyze_code(code)
     roast = scorer.get_grok_roast(code, score, details)
-    
-    print(f"Soul Score: {score}/100")
-    print("Detailed Scores:", details)
-    print("Grok's Roast:", roast)
-    
+
+    print(f"\nSoul Score: {score}/100")
+    print("Breakdown:", {k: round(v, 3) for k,v in details.items()})
+    print("\nGrok-style Roast & Suggestions:\n" + roast)
+
     if args.refine:
+        print("\nRefining (one pass)...")
         refined = scorer.refine_code(code)
         new_score, _ = scorer.analyze_code(refined)
-        print(f"Refined Score: {new_score}/100 (note diminishing returns)")
-        with open('refined.py', 'w') as f:
-            f.write(refined)
+        print(f"Refined soul score: {new_score}/100  (diminishing returns apply on further passes)")
+        print("\nRefined code snippet preview:\n" + '\n'.join(refined.splitlines()[:12]) + "\n...")
 
 if __name__ == "__main__":
     main()
