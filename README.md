@@ -1,4 +1,20 @@
----
+### Quick Try (Python 3.10+)
+
+```bash
+git clone https://github.com/LHMisme420/project-vata.git
+cd project-vata
+pip install -r requirements.txt
+# or if you want editable mode: pip install -e .
+
+# Basic soul score on any Python/JS file
+python vata/vata_run.py scan path/to/your_code.py
+
+# Auto-humanize + score
+python vata/vata_run.py scan messy_ai_code.js --auto-humanize --output humanized.js
+
+# Grok roast (needs API key)
+export GROK_API_KEY=your_key_here
+python vata/vata.py grok-roast path/to/code.py---
 title: Vata Soul Check
 emoji: 👀
 colorFrom: purple
