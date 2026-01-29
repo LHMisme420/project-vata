@@ -1,4 +1,4 @@
-name: VATA Soul Debug Check
+name: VATA Soul Check
 
 on:
   push:
@@ -8,28 +8,20 @@ on:
   workflow_dispatch:
 
 jobs:
-  soul-debug:
+  check:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install libcst
-        run: pip install libcst
+      - run: pip install libcst
 
-      - name: Check script
+      - name: Scan Python files (robust - skip invalids)
         run: |
-          ls vatahumanizer.py
-          python vatahumanizer.py --help
-
-      - name: Scan ALL .py files (debug mode - lenient)
-        run: |
-          echo "DEBUG MODE: Low threshold, no hard guardian block"
+          echo "Scanning with robust mode (skips parse fails)"
 
           problems=()
           exit_code=0
@@ -37,36 +29,38 @@ jobs:
           files=$(find . -type f \( -name "*.py" -o -name "*.PY" \) \
             ! -path "*/__pycache__/*" ! -path "./.git/*" ! -path "./.pytest_cache/*" || true)
 
-          echo "Scanning files:"
-          echo "$files" | sed 's/^/ - /'
-
           for f in $files; do
             echo ""
             echo "=== $f ==="
-            output=$(python vatahumanizer.py "$f" --level medium --target 30 2>&1 || echo "CRASH: exit $?")
-            echo "$output"
 
-            if echo "$output" | grep -qiE "REJECTED|violations|dangerous"; then
-              problems+=("$f → risky pattern warning (but not failing build)")
+            if [ ! -s "$f" ]; then
+              echo "SKIP: empty file"
+              continue
             fi
 
-            score_raw=$(echo "$output" | grep -i "SOUL SCORE" | grep -o '[0-9]\+' | head -1 || echo "0")
-            score=${score_raw:-0}
-            echo "Parsed score: $score"
+            output=$(python vatahumanizer.py "$f" --level medium --target 40 2>&1 || echo "CRASH")
 
-            if (( score < 30 )); then
-              problems+=("$f → low soul ($score < 30)")
+            echo "$output" | head -n 30   # limit log spam
+
+            if echo "$output" | grep -qi "REJECTED"; then
+              problems+=("$f → risky")
+            fi
+
+            score=$(echo "$output" | grep -oP 'SOUL SCORE: \K\d+' || echo "0")
+            if (( score < 40 )); then
+              problems+=("$f → low soul ($score)")
               exit_code=1
+            fi
+
+            if echo "$output" | grep -qi "ParserSyntaxError"; then
+              echo "WARN: parse failed - likely stub"
             fi
           done
 
-          echo ""
-          echo "=== SUMMARY ==="
-          if [ ${#problems[@]} -eq 0 ]; then
-            echo "GREEN: Everything passes (lenient mode)"
-          else
-            echo "ISSUES FOUND (${#problems[@]}):"
-            for p in "${problems[@]}"; do echo " - $p"; done
-            echo "(build fails due to low soul on some files - see above)"
+          if [ ${#problems[@]} -gt 0 ]; then
+            echo "Issues:"
+            printf ' - %s\n' "${problems[@]}"
             exit $exit_code
+          else
+            echo "All valid files OK"
           fi
