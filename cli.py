@@ -238,3 +238,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+from vata_logger import log
+log("Analysis run started")
