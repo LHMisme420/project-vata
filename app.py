@@ -1,144 +1,249 @@
-# app.py ── Complete single-file VATA Simple Checker (no external deps except built-ins)
-# Save this as app.py and run: streamlit run app.py
-# Push to GitHub → Hugging Face Space will auto-detect and run it
+import gradio as gr
+import textwrap
+from typing import Dict, Any, List, Tuple
 
-import streamlit as st
-import re
-import math
-import random
+# -----------------------------
+# Persona definitions
+# -----------------------------
 
-def simple_entropy(s: str) -> float:
-    """Calculate Shannon entropy for variable names."""
-    if not s:
-        return 0.0
-    counts = {}
-    for c in s:
-        counts[c] = counts.get(c, 0) + 1
-    probs = [count / len(s) for count in counts.values()]
-    return -sum(p * math.log2(p) for p in probs if p > 0)
+PERSONAS: Dict[str, Dict[str, Any]] = {
+    "default": {
+        "name": "Default",
+        "prefix": "# Humanized (default persona)\n",
+        "comment_style": "# ",
+    },
+    "2am_dev_rage": {
+        "name": "2am_dev_rage",
+        "prefix": "# 2AM DEV RAGE MODE ENGAGED\n# Why is this code like this?\n",
+        "comment_style": "# ",
+    },
+}
 
-def score_soul(code: str) -> dict:
-    """Main soul scoring function. Always returns a dict."""
+
+# -----------------------------
+# Core scoring / detection stubs
+# -----------------------------
+
+def compute_soul_score(code: str) -> Tuple[int, str]:
+    """
+    Very simple heuristic soul score:
+    - +20 if there are comments
+    - +20 if there are meaningful variable names (len > 2)
+    - -20 if 'eval' or 'exec' or 'rm -rf' appears
+    - clamp between 0 and 100
+    """
+    if not code.strip():
+        return 0, "No code provided. Soul score is 0."
+
+    score = 50
+    reasons: List[str] = []
+
+    # Comments
+    if "#" in code:
+        score += 20
+        reasons.append("+20: Found comments (human intent / frustration / explanation).")
+    else:
+        reasons.append("0: No comments detected (feels more sterile).")
+
+    # Variable names
+    tokens = [t for t in code.replace("(", " ").replace(")", " ").replace(",", " ").split() if t.isidentifier()]
+    long_names = [t for t in tokens if len(t) > 2]
+    if long_names:
+        score += 20
+        reasons.append("+20: Found non-trivial identifiers (more human-like naming).")
+    else:
+        reasons.append("0: No meaningful identifiers detected.")
+
+    # Dangerous patterns
+    danger = False
+    for bad in ["eval(", "exec(", "rm -rf", "subprocess.Popen", "os.system"]:
+        if bad in code:
+            score -= 20
+            danger = True
+            reasons.append(f"-20: Detected dangerous pattern: {bad}")
+    if not danger:
+        reasons.append("0: No obvious dangerous patterns detected.")
+
+    score = max(0, min(100, score))
+    summary = f"Soul score: {score}/100"
+    return score, summary + "\n" + "\n".join(reasons)
+
+
+def build_score_breakdown(score: int, explanation: str) -> str:
+    return explanation
+
+
+def humanize_code(code: str, persona_key: str) -> str:
+    persona = PERSONAS.get(persona_key, PERSONAS["default"])
+    prefix = persona["prefix"]
+    comment_style = persona["comment_style"]
+
+    if not code.strip():
+        return prefix + f"{comment_style}No code provided to humanize.\n"
+
+    # Simple humanization: wrap code with persona prefix and inject one comment at top
+    lines = code.splitlines()
+    if lines and not lines[0].strip().startswith("#"):
+        lines.insert(0, f"{comment_style}Persona: {persona['name']} reacting to this code...")
+
+    return prefix + "\n".join(lines)
+
+
+def swarm_votes(score: int) -> str:
+    """
+    Stub: pretend we have a swarm of agents voting.
+    """
+    if score >= 80:
+        verdict = "Strongly Human‑leaning"
+    elif score >= 50:
+        verdict = "Mixed but leaning Human"
+    elif score >= 30:
+        verdict = "Mixed but leaning Synthetic"
+    else:
+        verdict = "Strongly Synthetic‑leaning"
+
+    votes = textwrap.dedent(f"""
+    Swarm Agent Votes (stub):
+    - Agent_ethics: {verdict}
+    - Agent_style: {verdict}
+    - Agent_risk: {verdict}
+    - Agent_meta: {verdict}
+    """).strip()
+    return votes
+
+
+def zk_ethics_proof_stub(score: int) -> str:
+    """
+    Stub for ZK‑verifiable ethics proof.
+    """
+    return textwrap.dedent(f"""
+    ZK Ethics Proof (stub):
+    - Statement: "This code's soul score is {score}/100 under VATA‑Ethics‑v1."
+    - Proof: <placeholder zk‑SNARK / zk‑STARK proof bytes>
+    - Verifier: <to be implemented>
+    """).strip()
+
+
+# -----------------------------
+# Main pipeline for Gradio
+# -----------------------------
+
+def analyze_and_humanize(code_input: str, persona_key: str):
+    """
+    This is the single function wired to the Gradio button.
+    It must NEVER crash; all errors are caught and surfaced as text.
+    Returns:
+      soul_score_text, breakdown_text, humanized_text, swarm_votes_text, zk_proof_text
+    """
     try:
-        if not code.strip():
-            return {
-                "soul_score": 0,
-                "category": "Empty Input",
-                "signals": {"comments": 0, "todo_debug_quirky": 0, "name_entropy_avg": 0.0, "line_count": 0},
-                "risks": ["No code provided"],
-                "error": None
-            }
+        # 1. Compute soul score
+        score, explanation = compute_soul_score(code_input)
 
-        lines = [line for line in code.splitlines() if line.strip()]
-        n_lines = max(1, len(lines))
+        # 2. Build breakdown
+        breakdown = build_score_breakdown(score, explanation)
 
-        # Count signals
-        comment_count = len(re.findall(r'#|//|/\*|\* ', code))
-        todo_count    = len(re.findall(r'(?i)TODO|FIXME|HACK|NOTE', code))
-        debug_count   = len(re.findall(r'(?i)print\s*\(|console\.log|dbg|debug', code))
-        quirky_count  = len(re.findall(r'(?i)\b(lol|wtf|shit|crap|pls|pain|rip|send help|garbage|bruh|cursed)\b', code))
+        # 3. Humanize with persona
+        humanized = humanize_code(code_input, persona_key)
 
-        var_names = re.findall(r'\b[a-zA-Z_][a-zA-Z0-9_]{2,}\b', code)
-        name_entropy = sum(simple_entropy(v) for v in var_names) / max(1, len(var_names)) if var_names else 0.0
+        # 4. Swarm votes
+        votes = swarm_votes(score)
 
-        # Calculate score (tuned so messy code gets higher)
-        score = 0
-        score += min(35, comment_count * 3)
-        score += min(30, (todo_count + debug_count + quirky_count) * 6)
-        score += min(25, name_entropy * 10)
-        score += min(30, min(1.0, n_lines / 10) * 30)
+        # 5. ZK proof stub
+        zk_proof = zk_ethics_proof_stub(score)
 
-        score = int(min(100, max(0, score)))
-
-        category = "Trusted Artisan 🔥" if score >= 70 else "Suspicious 👻" if score <= 40 else "Mixed ⚖️"
-
-        risks = []
-        if re.search(r'(?i)api_key|secret|token|password', code):
-            risks.append("Possible secret / credential")
-        if re.search(r'(?i)eval\(|exec\(', code):
-            risks.append("Dangerous eval/exec")
-
-        return {
-            "soul_score": score,
-            "category": category,
-            "signals": {
-                "comments": comment_count,
-                "todo_debug_quirky": todo_count + debug_count + quirky_count,
-                "name_entropy_avg": round(name_entropy, 2),
-                "line_count": n_lines
-            },
-            "risks": risks,
-            "error": None
-        }
+        soul_score_text = f"{score}/100"
+        return soul_score_text, breakdown, humanized, votes, zk_proof
 
     except Exception as e:
-        return {
-            "soul_score": 0,
-            "category": "Analysis Error",
-            "signals": {},
-            "risks": [],
-            "error": str(e)
-        }
+        err = f"Internal error during analysis: {type(e).__name__}: {e}"
+        # Return the same error to all panels so nothing is blank
+        return err, err, err, err, err
 
-def add_simple_soul(code: str) -> str:
-    """Add random human-like comments."""
-    try:
-        lines = code.splitlines()
-        injections = [
-            "# TODO: fix later lol",
-            "# 3am vibes don't judge",
-            "# send help this works somehow",
-            "# debug – remove before commit",
-            "# cursed but cute 💀",
-            "# yeah... this is fine (copium)",
-        ]
-        new_lines = []
-        for line in lines:
-            new_lines.append(line)
-            if random.random() < 0.18 and line.strip() and not line.strip().startswith('#'):
-                new_lines.append("    " + random.choice(injections))
-        return "\n".join(new_lines)
-    except Exception as e:
-        return code + f"\n\n# Humanizer failed: {str(e)}"
 
-# ────────────────────────────────────────────────
-#                Streamlit UI
-# ────────────────────────────────────────────────
+# -----------------------------
+# Gradio UI
+# -----------------------------
 
-st.set_page_config(page_title="VATA Simple Checker", layout="wide")
+with gr.Blocks(title="Project Vata - Soul Detection & Ethical Guardian") as demo:
+    gr.Markdown(
+        """
+        # 🜆 Project Vata - Soul Detection & Ethical Guardian
 
-st.title("🛡️ VATA Simple Checker")
-st.markdown("Paste code → get soul score + optional humanization. Built by @Lhmisme")
+        Detects human soul in code (vs sterile AI output), blocks dangers/PII, humanizes with personality,
+        uses agent swarm voting, and stubs ZK‑verifiable ethics proofs.
 
-code_input = st.text_area(
-    "Paste your code here",
-    height=300,
-    placeholder="def example():\n    pass  # TODO: add some soul"
-)
+        **Try it:** Paste code → get score, breakdown, humanized version, agent votes, proof stub.
+        """
+    )
 
-col1, col2 = st.columns(2)
+    with gr.Row():
+        with gr.Column(scale=2):
+            code_input = gr.Code(
+                label="Paste your code snippet here (Python/PowerShell/JS/etc.)",
+                language="python",
+                value="def fib(n):\n    return n if n <= 1 else fib(n-1) + fib(n-2)",
+            )
+            persona = gr.Dropdown(
+                label="Humanizer Persona (style injection)",
+                choices=list(PERSONAS.keys()),
+                value="2am_dev_rage",
+            )
+            analyze_btn = gr.Button("Analyze & Humanize 🔍🜆")
 
-with col1:
-    if st.button("Analyze Soul", type="primary", use_container_width=True):
-        result = score_soul(code_input)
+        with gr.Column(scale=3):
+            soul_score = gr.Textbox(
+                label="Soul Score & Status",
+                interactive=False,
+            )
+            breakdown = gr.Textbox(
+                label="Score Breakdown (why points?)",
+                lines=8,
+                interactive=False,
+            )
+            humanized = gr.Code(
+                label="Humanized Version (with injected soul)",
+                language="python",
+                interactive=False,
+            )
+            swarm = gr.Textbox(
+                label="Swarm Agent Votes",
+                lines=6,
+                interactive=False,
+            )
+            zk_proof = gr.Textbox(
+                label="ZK Ethics Proof (stub)",
+                lines=6,
+                interactive=False,
+            )
 
-        if result.get("error"):
-            st.error(f"Analysis error: {result['error']}")
-        else:
-            color = "green" if result["soul_score"] >= 70 else "red" if result["soul_score"] <= 40 else "orange"
-            st.markdown(f"<h2 style='color:{color}; text-align:center;'>{result['soul_score']}/100</h2>", unsafe_allow_html=True)
-            st.markdown(f"**Category:** {result['category']}")
+    analyze_btn.click(
+        fn=analyze_and_humanize,
+        inputs=[code_input, persona],
+        outputs=[soul_score, breakdown, humanized, swarm, zk_proof],
+    )
 
-            with st.expander("Signals breakdown"):
-                st.json(result["signals"])
+    gr.Markdown(
+        """
+        ## Examples
 
-            if result["risks"]:
-                st.error("Risks detected: " + ", ".join(result["risks"]))
+        - Simple recursion:
+          ```python
+          def fib(n):
+              return n if n <= 1 else fib(n-1) + fib(n-2)
+          ```
 
-with col2:
-    if st.button("Humanize (Add Soul)", use_container_width=True):
-        humanized = add_simple_soul(code_input)
-        st.code(humanized, language="python")
+        - Rage‑annotated:
+          ```python
+          # Why god why is this recursive hell
+          def fib(n): print('pain'); return n if n<=1 else fib(n-1)+fib(n-2)
+          ```
 
-st.markdown("---")
-st.caption("Project VATA – Verifiable AI Governance • Open Source • @Lhmisme • Reynolds, GA")
+        - Dangerous:
+          ```python
+          eval('rm -rf /')  # oops
+          ```
+        """
+    )
+
+if __name__ == "__main__":
+    demo.launch()
