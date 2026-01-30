@@ -1,0 +1,5 @@
+{
+  "dangerous_patterns": ["eval(", "exec("],
+  "bias_keywords": ["race", "gender"],
+  "default_persona": "default"
+}
