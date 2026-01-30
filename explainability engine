@@ -1,0 +1,310 @@
+"""
+VATA Explainability Engine
+
+Given:
+    - per-dimension scores for a code artifact
+    - optional metadata (file path, author, timestamp, etc.)
+
+Produces:
+    - structured JSON explanation
+    - optional Markdown summary for UI / reports
+
+Drop-in: no external deps, pure Python.
+"""
+
+from dataclasses import dataclass, asdict
+from typing import Dict, List, Any, Optional
+import math
+import textwrap
+
+
+# You can align these with your existing 24D lattice labels
+DEFAULT_DIMENSION_LABELS = {
+    "style_consistency": "Style Consistency",
+    "naming_coherence": "Naming Coherence",
+    "modularity": "Modularity & Decomposition",
+    "error_handling": "Error Handling Discipline",
+    "docstring_quality": "Docstring & Comment Quality",
+    "dependency_hygiene": "Dependency Hygiene",
+    "testability": "Testability & Isolation",
+    "complexity": "Complexity Management",
+    "security_posture": "Security Posture",
+    "performance_awareness": "Performance Awareness",
+    # ...extend / map to your full lattice
+}
+
+
+@dataclass
+class DimensionExplanation:
+    key: str
+    label: str
+    score: float
+    normalized_score: float
+    band: str
+    narrative: str
+
+
+@dataclass
+class VATAExplanation:
+    artifact_id: str
+    overall_score: float
+    band: str
+    dimensions: List[DimensionExplanation]
+    summary: str
+    metadata: Dict[str, Any]
+
+
+class VATAExplanationEngine:
+    """
+    Core explainability engine.
+
+    Responsibilities:
+        - normalize scores
+        - assign bands (e.g., Low / Medium / High / Critical)
+        - generate per-dimension narratives
+        - generate overall summary
+        - export as dict / Markdown
+    """
+
+    def __init__(
+        self,
+        dimension_labels: Optional[Dict[str, str]] = None,
+        low_threshold: float = 0.4,
+        medium_threshold: float = 0.7,
+        high_threshold: float = 0.9,
+    ) -> None:
+        self.dimension_labels = dimension_labels or DEFAULT_DIMENSION_LABELS
+        self.low_threshold = low_threshold
+        self.medium_threshold = medium_threshold
+        self.high_threshold = high_threshold
+
+    # ---------- Public API ----------
+
+    def explain(
+        self,
+        artifact_id: str,
+        scores: Dict[str, float],
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> VATAExplanation:
+        """
+        Main entrypoint.
+
+        Args:
+            artifact_id: stable identifier for the code artifact
+            scores: mapping of dimension_key -> score (0.0 - 1.0 recommended)
+            metadata: optional contextual info (file path, author, etc.)
+
+        Returns:
+            VATAExplanation dataclass instance
+        """
+        metadata = metadata or {}
+
+        cleaned_scores = self._sanitize_scores(scores)
+        overall_score = self._compute_overall_score(cleaned_scores)
+        overall_band = self._band_for_score(overall_score)
+
+        dimensions: List[DimensionExplanation] = []
+        for key, score in cleaned_scores.items():
+            label = self.dimension_labels.get(key, key)
+            normalized = self._normalize_score(score)
+            band = self._band_for_score(normalized)
+            narrative = self._dimension_narrative(key, label, normalized, band)
+            dimensions.append(
+                DimensionExplanation(
+                    key=key,
+                    label=label,
+                    score=score,
+                    normalized_score=normalized,
+                    band=band,
+                    narrative=narrative,
+                )
+            )
+
+        summary = self._overall_summary(
+            artifact_id=artifact_id,
+            overall_score=overall_score,
+            band=overall_band,
+            dimensions=dimensions,
+        )
+
+        return VATAExplanation(
+            artifact_id=artifact_id,
+            overall_score=overall_score,
+            band=overall_band,
+            dimensions=dimensions,
+            summary=summary,
+            metadata=metadata,
+        )
+
+    def to_dict(self, explanation: VATAExplanation) -> Dict[str, Any]:
+        """
+        Convert explanation dataclass to a JSON-serializable dict.
+        """
+        data = asdict(explanation)
+        # dataclasses nested conversion is already handled by asdict
+        return data
+
+    def to_markdown(self, explanation: VATAExplanation) -> str:
+        """
+        Render a Markdown summary suitable for UI or reports.
+        """
+        lines: List[str] = []
+
+        lines.append(f"# VATA Explainability Report: `{explanation.artifact_id}`")
+        lines.append("")
+        lines.append(f"**Overall Score:** `{explanation.overall_score:.3f}`  ")
+        lines.append(f"**Band:** `{explanation.band}`")
+        lines.append("")
+        if explanation.metadata:
+            lines.append("## Metadata")
+            for k, v in explanation.metadata.items():
+                lines.append(f"- **{k}:** {v}")
+            lines.append("")
+
+        lines.append("## Summary")
+        lines.append(explanation.summary)
+        lines.append("")
+
+        lines.append("## Dimension Breakdown")
+        for dim in explanation.dimensions:
+            lines.append(f"### {dim.label} (`{dim.key}`)")
+            lines.append(f"- **Score:** `{dim.score:.3f}`")
+            lines.append(f"- **Normalized:** `{dim.normalized_score:.3f}`")
+            lines.append(f"- **Band:** `{dim.band}`")
+            lines.append("")
+            lines.append(self._indent(dim.narrative))
+            lines.append("")
+
+        return "\n".join(lines)
+
+    # ---------- Internals ----------
+
+    def _sanitize_scores(self, scores: Dict[str, float]) -> Dict[str, float]:
+        cleaned: Dict[str, float] = {}
+        for key, value in scores.items():
+            if value is None or math.isnan(value):
+                continue
+            # clamp to [0, 1] by default; adjust if your lattice uses other ranges
+            cleaned[key] = max(0.0, min(1.0, float(value)))
+        return cleaned
+
+    def _normalize_score(self, score: float) -> float:
+        # Here it's identity, but you can plug in lattice-specific transforms
+        return max(0.0, min(1.0, score))
+
+    def _compute_overall_score(self, scores: Dict[str, float]) -> float:
+        if not scores:
+            return 0.0
+        return sum(scores.values()) / len(scores)
+
+    def _band_for_score(self, score: float) -> str:
+        if score < self.low_threshold:
+            return "Low"
+        if score < self.medium_threshold:
+            return "Medium"
+        if score < self.high_threshold:
+            return "High"
+        return "Critical"
+
+    def _dimension_narrative(
+        self,
+        key: str,
+        label: str,
+        score: float,
+        band: str,
+    ) -> str:
+        """
+        Generate a short narrative for a single dimension.
+        You can tune this to match VATA's voice.
+        """
+        base = f"{label} ({key}) is rated **{band}** with a normalized score of {score:.3f}."
+
+        if band == "Low":
+            detail = (
+                "This area shows significant deviation from expected patterns. "
+                "It likely reflects either inconsistent authorship signals or "
+                "a style that diverges sharply from the reference profile."
+            )
+        elif band == "Medium":
+            detail = (
+                "This dimension is partially aligned with the reference profile. "
+                "Some signals match expected patterns, while others introduce noise "
+                "or ambiguity in authorship attribution."
+            )
+        elif band == "High":
+            detail = (
+                "This dimension is strongly aligned with the reference profile. "
+                "The observed patterns reinforce the current authorship hypothesis."
+            )
+        else:  # Critical
+            detail = (
+                "This dimension is highly characteristic of the reference profile. "
+                "It carries strong evidentiary weight for authorship attribution."
+            )
+
+        return base + " " + detail
+
+    def _overall_summary(
+        self,
+        artifact_id: str,
+        overall_score: float,
+        band: str,
+        dimensions: List[DimensionExplanation],
+    ) -> str:
+        """
+        Generate a compact overall narrative.
+        """
+        strong = [d.label for d in dimensions if d.band in ("High", "Critical")]
+        weak = [d.label for d in dimensions if d.band == "Low"]
+
+        parts: List[str] = []
+        parts.append(
+            f"Artifact `{artifact_id}` has an overall VATA score of {overall_score:.3f}, "
+            f"placing it in the **{band}** evidentiary band."
+        )
+
+        if strong:
+            parts.append(
+                "The following dimensions strongly support the current authorship hypothesis: "
+                + ", ".join(strong)
+                + "."
+            )
+
+        if weak:
+            parts.append(
+                "The following dimensions introduce uncertainty or divergence and may warrant closer review: "
+                + ", ".join(weak)
+                + "."
+            )
+
+        if not strong and not weak:
+            parts.append(
+                "Dimension scores are relatively uniform, with no single axis dominating the signal."
+            )
+
+        return " ".join(parts)
+
+    def _indent(self, text: str, width: int = 4) -> str:
+        return textwrap.indent(text, " " * width)
+
+
+# ---------- Example usage (you can move this to tests or a demo script) ----------
+
+if __name__ == "__main__":
+    engine = VATAExplanationEngine()
+
+    sample_scores = {
+        "style_consistency": 0.92,
+        "naming_coherence": 0.81,
+        "modularity": 0.65,
+        "error_handling": 0.33,
+        "docstring_quality": 0.48,
+    }
+
+    explanation = engine.explain(
+        artifact_id="src/example_module.py",
+        scores=sample_scores,
+        metadata={"author_candidate": "Author_A", "run_id": "demo-001"},
+    )
+
+    print(engine.to_markdown(explanation))
