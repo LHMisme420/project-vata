@@ -1,40 +1,57 @@
-# Project VATA — Verifiable AI Trust & Authenticity
+# VATA — Visual Authorship & Transparency Analyzer  
+Soul Scoring • Ethics Detection • Humanization • Fingerprinting • ZK‑Proof Stubs  
+VATA is a multi‑dimensional code analysis engine designed to evaluate authorship signals, ethical risk, fairness and bias, human‑likeness, stylistic fingerprinting, explainability, and zero‑knowledge proof stubs. It runs fully offline, locally, and deterministically, providing a transparent and auditable analysis pipeline for developers, researchers, and compliance environments.
 
-**VATA** is an open-source toolkit designed to help developers, teams, and organizations distinguish human-authored code from AI-generated content in real-world codebases.
+VATA includes soul scoring (0–100), ethics and fairness scanning, persona‑based humanization, swarm consensus voting, and a ZK‑Ethics proof stub. Upcoming modules include JSON output mode, batch folder scanning, and token‑level fingerprinting for authorship attribution.
 
-It analyzes source code using lightweight heuristics, embedding-based similarity checks, behavioral patterns, and structural signals to estimate the likelihood of **human origin** vs **AI generation**. The tool helps mitigate risks from low-quality AI output (shallow logic, missing error handling, insecure patterns) while preserving authentic developer style.
+The repository structure includes the CLI engine (`vata_cli.py`), JSON output module (`vata_json.py`), batch scanning engine (`vata_batch.py`), fingerprinting engine (`vata_fingerprint.py`), explainability hooks (`vata_explain.py`), Streamlit UI (`app.py`), fairness logic (`vata_fairness.py`), humanizer (`vatahumanizer.py`), legacy engine (`VATA.py`), tests, documentation, and this README.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-![Status](https://img.shields.io/badge/status-alpha-orange)
+The CLI is the primary interface for VATA. To analyze raw code, run:  
+`python vata_cli.py analyze dummy --text "print('hello world')"`  
+To analyze a file:  
+`python vata_cli.py analyze myscript.py`  
+To use a persona:  
+`python vata_cli.py analyze dummy --text "print('x')" --persona 2am_dev_rage"`
 
-## Why VATA?
+Example output:  
+==============================  
+SOUL SCORE: 60/100  
+==============================  
+Breakdown:  
+- 0: No comments detected.  
+- +20: Found meaningful identifiers.  
+- 0: No dangerous patterns detected.  
+- -10: Code is very short/trivial.  
+Fairness / Ethics:  
+No PII detected.  
+No bias-related keywords detected.  
+Humanized Version:  
+# Humanized (default persona)  
+# Persona: default reacting...  
+print('hello world')  
+Swarm Votes:  
+- Agent_ethics: Mixed but leaning Human  
+- Agent_style: Mixed but leaning Human  
+- Agent_risk: Mixed but leaning Human  
+- Agent_meta: Mixed but leaning Human  
+ZK Proof Stub:  
+- Statement: "Soul score = 60/100 under VATA‑Ethics‑v1."  
+- Fairness summary hash: <hash(...)>  
+- Proof bytes: <placeholder>
 
-As AI coding assistants become ubiquitous, repositories are increasingly filled with synthetic code that can introduce:
-- Subtle bugs from incomplete reasoning
-- Security anti-patterns (eval, shell injection risks)
-- Maintenance debt (flat structure, missing comments/context)
-- Provenance & IP uncertainty
+JSON Mode (v2) will allow machine‑readable output using:  
+`python vata_cli.py analyze dummy --text "print('hello')" --json`  
+which returns structured JSON containing soul score, breakdown, fairness, humanized output, swarm votes, and ZK proof.
 
-VATA provides fast, local-first signals to:
-- Flag probable AI-generated sections in PRs / audits
-- Encourage human review of high-risk fragments
-- Support future verifiable provenance (ZK-based human-origin proofs)
+Batch folder scanning (v2) will allow repository‑wide analysis using:  
+`python vata_cli.py analyze-folder C:\project`  
+producing a JSON map of all analyzed files.
 
-## Features (as of January 2026)
+The fingerprinting engine (v2) will extract token distribution, identifier frequency, and stylistic signatures to support authorship attribution, drift detection, and compliance verification.
 
-- **Local CLI checker** — paste or feed files, get instant origin score (0–100)
-- **Embedding similarity** — compares against human vs AI reference centroids (using sentence-transformers)
-- **Behavioral & structural signals**:
-  - Comment density & personality markers
-  - Control-flow / error-handling complexity
-  - Identifier entropy & naming realism
-  - Provenance noise (merge artifacts, commit-like strings)
-  - Risk pattern detection (dangerous builtins, eval/exec, etc.)
-- **Optional Grok-powered rewrite** — adds realistic human-style comments, structure, and safeguards (API key required)
-- **Evasion resistance** — diminishing returns on naive "humanizing" tricks (fake TODO spam, random entropy)
-- Supported languages: **Python**, **JavaScript/TypeScript**, **PowerShell** (more coming)
+The roadmap includes real ZK‑proof generation, model‑agnostic drift cartography, governance and compliance capsules, full authorship lineage verification, API server mode, and a VSCode extension.
 
+License: MIT (or your preferred license).
 Early benchmarks show clean LLM output often scores <45 while real developer code (with quirks, debug aids, domain context) frequently reaches 70–95+.
 
 ## Installation
