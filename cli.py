@@ -244,3 +244,5 @@ import json
 
 def as_json(data):
     print(json.dumps(data, indent=2))
+import json
+config = json.load(open("vata.config.json"))
