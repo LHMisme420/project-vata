@@ -1,14 +1,12 @@
 import re
 import textwrap
-from typing import Dict, Any, List, Tuple
-
 import gradio as gr
 
 # -----------------------------
 # Persona definitions
 # -----------------------------
 
-PERSONAS: Dict[str, Dict[str, Any]] = {
+PERSONAS = {
     "default": {
         "name": "default",
         "prefix": "# Humanized (default persona)\n",
@@ -21,9 +19,8 @@ PERSONAS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-
 # -----------------------------
-# Core analysis helpers
+# Heuristic helpers
 # -----------------------------
 
 DANGEROUS_PATTERNS = [
@@ -52,15 +49,8 @@ BIAS_KEYWORDS = [
 ]
 
 
-def compute_soul_score(code: str) -> Tuple[int, List[str]]:
-    """
-    Heuristic soul score:
-    - +20 if comments exist
-    - +20 if meaningful identifiers exist
-    - -20 if dangerous patterns exist
-    - -10 if code is extremely short / trivial
-    """
-    reasons: List[str] = []
+def compute_soul_score(code: str):
+    reasons = []
     if not code.strip():
         return 0, ["No code provided. Soul score is 0."]
 
@@ -106,7 +96,7 @@ def compute_soul_score(code: str) -> Tuple[int, List[str]]:
     return score, reasons
 
 
-def detect_pii(code: str) -> List[str]:
+def detect_pii(code: str):
     hits = []
     for pattern in PII_PATTERNS:
         if re.search(pattern, code):
@@ -114,7 +104,7 @@ def detect_pii(code: str) -> List[str]:
     return hits
 
 
-def detect_bias(code: str) -> List[str]:
+def detect_bias(code: str):
     hits = []
     lowered = code.lower()
     for kw in BIAS_KEYWORDS:
@@ -124,7 +114,7 @@ def detect_bias(code: str) -> List[str]:
 
 
 def build_fairness_ethics_report(code: str) -> str:
-    lines: List[str] = []
+    lines = []
 
     pii_hits = detect_pii(code)
     bias_hits = detect_bias(code)
@@ -191,15 +181,10 @@ def zk_ethics_proof_stub(score: int, fairness_report: str) -> str:
 
 
 # -----------------------------
-# Main pipeline for Gradio
+# Main pipeline (never crashes)
 # -----------------------------
 
-def analyze_pipeline(code_input: str, persona_key: str):
-    """
-    Single entry point for the UI.
-    Returns:
-      soul_score_text, breakdown_text, humanized_text, swarm_votes_text, zk_proof_text
-    """
+def analyze(code_input: str, persona_key: str):
     try:
         if not code_input.strip():
             msg = "No code provided."
@@ -291,29 +276,9 @@ with gr.Blocks(title="Project Vata - Soul Detection & Ethical Guardian") as demo
             )
 
     analyze_btn.click(
-        fn=analyze_pipeline,
+        fn=analyze,
         inputs=[code_input, persona],
         outputs=[soul_score, breakdown, humanized, swarm, zk_proof],
-    )
-
-    gr.Markdown(
-        """
-        ## Examples
-
-        ```python
-        def fib(n):
-            return n if n <= 1 else fib(n-1) + fib(n-2)
-        ```
-
-        ```python
-        # Why god why is this recursive hell
-        def fib(n): print('pain'); return n if n<=1 else fib(n-1)+fib(n-2)
-        ```
-
-        ```python
-        eval('rm -rf /')  # oops
-        ```
-        """
     )
 
 if __name__ == "__main__":
