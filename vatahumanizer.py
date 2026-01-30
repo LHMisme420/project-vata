@@ -167,3 +167,55 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+# src/vata/humanizer.py
+import os
+import requests
+import random
+
+QUIRKY_COMMENTS = [
+    "# TODO: fix this before prod lol",
+    "# 3AM special – don't @ me",
+    "# send help this works but why",
+    "# cursed but functional 💀",
+    "# debug print – remove me later",
+    "# yeah... this is fine (copium)",
+    "# soul damage from last night",
+]
+
+def inject_rule_based_soul(code: str, intensity: float = 0.8) -> str:
+    lines = code.splitlines()
+    new_lines = []
+    for line in lines:
+        new_lines.append(line)
+        if random.random() < intensity * 0.2 and line.strip() and not line.strip().startswith('#'):
+            if random.random() < 0.5:
+                new_lines.append("    " + random.choice(QUIRKY_COMMENTS))
+    return "\n".join(new_lines)
+
+def humanize_with_grok(code: str) -> str:
+    api_key = os.getenv("GROK_API_KEY")
+    if not api_key:
+        return inject_rule_based_soul(code)  # fallback
+
+    url = "https://api.x.ai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "grok-3",
+        "messages": [
+            {"role": "system", "content": "You are a chaotic, sarcastic, 3AM human developer. Rewrite the code to add personality, messy comments, debug prints, quirky names, TODOs – make it feel authentically human without breaking functionality."},
+            {"role": "user", "content": f"Humanize this code:\n\n{code}"}
+        ],
+        "temperature": 0.9,
+        "max_tokens": 4096
+    }
+
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=60)
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"].strip("```python\n").strip("```")
+    except Exception as e:
+        print(f"Grok error: {e}")
+        return inject_rule_based_soul(code)
