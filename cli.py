@@ -246,3 +246,9 @@ def as_json(data):
     print(json.dumps(data, indent=2))
 import json
 config = json.load(open("vata.config.json"))
+def analyze_folder(path):
+    from pathlib import Path
+    for file in Path(path).rglob("*.py"):
+        code = file.read_text(errors="ignore")
+        print(f"\n--- Analyzing {file} ---")
+        run_analysis(code, persona="default")
