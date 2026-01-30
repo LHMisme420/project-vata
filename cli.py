@@ -240,3 +240,7 @@ if __name__ == "__main__":
     main()
 from vata_logger import log
 log("Analysis run started")
+import json
+
+def as_json(data):
+    print(json.dumps(data, indent=2))
