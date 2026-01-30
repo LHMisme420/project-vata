@@ -1,8 +1,6 @@
+sentence-transformers>=2.7.0
+numpy>=1.26.0
+torch>=2.0.0
 streamlit>=1.30.0
-gitpython
-gradio==6.3.0
-torch
-transformers
-numpy
-sentence-transformers
-onnx
+requests>=2.31.0
+python-dotenv>=1.0.0  # for GROK_API_KEY
