@@ -49,3 +49,5 @@ source .venv/bin/activate    # Linux/macOS
 # or .venv\Scripts\activate   # Windows
 
 pip install -r requirements.txt
+<img width="1920" height="1080" alt="Screenshot (284)" src="https://github.com/user-attachments/assets/bfdee100-1760-4400-9b4f-9b2f6d79ca33" />
+<img width="1920" height="1080" alt="Screenshot (285)" src="https://github.com/user-attachments/assets/415c5c10-cd8a-445e-872a-3c7323d81d8a" />
