@@ -1,6 +1,8 @@
-import gradio as gr
+import re
 import textwrap
 from typing import Dict, Any, List, Tuple
+
+import gradio as gr
 
 # -----------------------------
 # Persona definitions
@@ -8,7 +10,7 @@ from typing import Dict, Any, List, Tuple
 
 PERSONAS: Dict[str, Dict[str, Any]] = {
     "default": {
-        "name": "Default",
+        "name": "default",
         "prefix": "# Humanized (default persona)\n",
         "comment_style": "# ",
     },
@@ -21,56 +23,126 @@ PERSONAS: Dict[str, Dict[str, Any]] = {
 
 
 # -----------------------------
-# Core scoring / detection stubs
+# Core analysis helpers
 # -----------------------------
 
-def compute_soul_score(code: str) -> Tuple[int, str]:
+DANGEROUS_PATTERNS = [
+    "eval(",
+    "exec(",
+    "rm -rf",
+    "subprocess.Popen",
+    "os.system",
+    "pickle.loads",
+]
+
+PII_PATTERNS = [
+    r"\b\d{3}-\d{2}-\d{4}\b",          # SSN-like
+    r"\b\d{16}\b",                     # 16-digit card
+    r"\b\d{4} \d{4} \d{4} \d{4}\b",    # spaced card
+    r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",  # email
+]
+
+BIAS_KEYWORDS = [
+    "race",
+    "gender",
+    "religion",
+    "ethnicity",
+    "IQ",
+    "stereotype",
+]
+
+
+def compute_soul_score(code: str) -> Tuple[int, List[str]]:
     """
-    Very simple heuristic soul score:
-    - +20 if there are comments
-    - +20 if there are meaningful variable names (len > 2)
-    - -20 if 'eval' or 'exec' or 'rm -rf' appears
-    - clamp between 0 and 100
+    Heuristic soul score:
+    - +20 if comments exist
+    - +20 if meaningful identifiers exist
+    - -20 if dangerous patterns exist
+    - -10 if code is extremely short / trivial
     """
+    reasons: List[str] = []
     if not code.strip():
-        return 0, "No code provided. Soul score is 0."
+        return 0, ["No code provided. Soul score is 0."]
 
     score = 50
-    reasons: List[str] = []
 
     # Comments
     if "#" in code:
         score += 20
-        reasons.append("+20: Found comments (human intent / frustration / explanation).")
+        reasons.append("+20: Found comments (intent, frustration, explanation).")
     else:
-        reasons.append("0: No comments detected (feels more sterile).")
+        reasons.append("0: No comments detected (more sterile).")
 
-    # Variable names
-    tokens = [t for t in code.replace("(", " ").replace(")", " ").replace(",", " ").split() if t.isidentifier()]
+    # Identifiers
+    tokens = [
+        t for t in code.replace("(", " ").replace(")", " ").replace(",", " ").split()
+        if t.isidentifier()
+    ]
     long_names = [t for t in tokens if len(t) > 2]
     if long_names:
         score += 20
-        reasons.append("+20: Found non-trivial identifiers (more human-like naming).")
+        reasons.append("+20: Found non-trivial identifiers (human-like naming).")
     else:
         reasons.append("0: No meaningful identifiers detected.")
 
     # Dangerous patterns
-    danger = False
-    for bad in ["eval(", "exec(", "rm -rf", "subprocess.Popen", "os.system"]:
+    danger_found = False
+    for bad in DANGEROUS_PATTERNS:
         if bad in code:
             score -= 20
-            danger = True
+            danger_found = True
             reasons.append(f"-20: Detected dangerous pattern: {bad}")
-    if not danger:
+    if not danger_found:
         reasons.append("0: No obvious dangerous patterns detected.")
 
+    # Triviality
+    if len(code.splitlines()) <= 3:
+        score -= 10
+        reasons.append("-10: Code is very short/trivial.")
+    else:
+        reasons.append("0: Code length is reasonable.")
+
     score = max(0, min(100, score))
-    summary = f"Soul score: {score}/100"
-    return score, summary + "\n" + "\n".join(reasons)
+    return score, reasons
 
 
-def build_score_breakdown(score: int, explanation: str) -> str:
-    return explanation
+def detect_pii(code: str) -> List[str]:
+    hits = []
+    for pattern in PII_PATTERNS:
+        if re.search(pattern, code):
+            hits.append(f"Possible PII match: {pattern}")
+    return hits
+
+
+def detect_bias(code: str) -> List[str]:
+    hits = []
+    lowered = code.lower()
+    for kw in BIAS_KEYWORDS:
+        if kw in lowered:
+            hits.append(f"Potential bias-related keyword: '{kw}'")
+    return hits
+
+
+def build_fairness_ethics_report(code: str) -> str:
+    lines: List[str] = []
+
+    pii_hits = detect_pii(code)
+    bias_hits = detect_bias(code)
+
+    if pii_hits:
+        lines.append("PII / Sensitive Data Flags:")
+        lines.extend([f"- {h}" for h in pii_hits])
+    else:
+        lines.append("No obvious PII patterns detected.")
+
+    if bias_hits:
+        lines.append("")
+        lines.append("Bias / Ethics Flags:")
+        lines.extend([f"- {h}" for h in bias_hits])
+    else:
+        lines.append("No obvious bias-related keywords detected.")
+
+    return "\n".join(lines)
 
 
 def humanize_code(code: str, persona_key: str) -> str:
@@ -81,7 +153,6 @@ def humanize_code(code: str, persona_key: str) -> str:
     if not code.strip():
         return prefix + f"{comment_style}No code provided to humanize.\n"
 
-    # Simple humanization: wrap code with persona prefix and inject one comment at top
     lines = code.splitlines()
     if lines and not lines[0].strip().startswith("#"):
         lines.insert(0, f"{comment_style}Persona: {persona['name']} reacting to this code...")
@@ -90,9 +161,6 @@ def humanize_code(code: str, persona_key: str) -> str:
 
 
 def swarm_votes(score: int) -> str:
-    """
-    Stub: pretend we have a swarm of agents voting.
-    """
     if score >= 80:
         verdict = "Strongly Human‑leaning"
     elif score >= 50:
@@ -112,13 +180,11 @@ def swarm_votes(score: int) -> str:
     return votes
 
 
-def zk_ethics_proof_stub(score: int) -> str:
-    """
-    Stub for ZK‑verifiable ethics proof.
-    """
+def zk_ethics_proof_stub(score: int, fairness_report: str) -> str:
     return textwrap.dedent(f"""
     ZK Ethics Proof (stub):
     - Statement: "This code's soul score is {score}/100 under VATA‑Ethics‑v1."
+    - Fairness/Ethics summary hash: <hash({fairness_report[:120]}...)>
     - Proof: <placeholder zk‑SNARK / zk‑STARK proof bytes>
     - Verifier: <to be implemented>
     """).strip()
@@ -128,35 +194,43 @@ def zk_ethics_proof_stub(score: int) -> str:
 # Main pipeline for Gradio
 # -----------------------------
 
-def analyze_and_humanize(code_input: str, persona_key: str):
+def analyze_pipeline(code_input: str, persona_key: str):
     """
-    This is the single function wired to the Gradio button.
-    It must NEVER crash; all errors are caught and surfaced as text.
+    Single entry point for the UI.
     Returns:
       soul_score_text, breakdown_text, humanized_text, swarm_votes_text, zk_proof_text
     """
     try:
-        # 1. Compute soul score
-        score, explanation = compute_soul_score(code_input)
+        if not code_input.strip():
+            msg = "No code provided."
+            return "0/100", msg, "# Nothing to humanize.\n", "No votes.", "No proof."
 
-        # 2. Build breakdown
-        breakdown = build_score_breakdown(score, explanation)
+        # 1. Soul score
+        score, reasons = compute_soul_score(code_input)
+        breakdown_lines = [f"Soul score: {score}/100", ""]
+        breakdown_lines.extend(reasons)
 
-        # 3. Humanize with persona
+        # 2. Fairness / ethics
+        fairness_report = build_fairness_ethics_report(code_input)
+        breakdown_lines.append("")
+        breakdown_lines.append("Fairness / Ethics:")
+        breakdown_lines.append(fairness_report)
+
+        breakdown_text = "\n".join(breakdown_lines)
+
+        # 3. Humanized code
         humanized = humanize_code(code_input, persona_key)
 
         # 4. Swarm votes
         votes = swarm_votes(score)
 
         # 5. ZK proof stub
-        zk_proof = zk_ethics_proof_stub(score)
+        zk = zk_ethics_proof_stub(score, fairness_report)
 
-        soul_score_text = f"{score}/100"
-        return soul_score_text, breakdown, humanized, votes, zk_proof
+        return f"{score}/100", breakdown_text, humanized, votes, zk
 
     except Exception as e:
         err = f"Internal error during analysis: {type(e).__name__}: {e}"
-        # Return the same error to all panels so nothing is blank
         return err, err, err, err, err
 
 
@@ -169,8 +243,8 @@ with gr.Blocks(title="Project Vata - Soul Detection & Ethical Guardian") as demo
         """
         # 🜆 Project Vata - Soul Detection & Ethical Guardian
 
-        Detects human soul in code (vs sterile AI output), blocks dangers/PII, humanizes with personality,
-        uses agent swarm voting, and stubs ZK‑verifiable ethics proofs.
+        Detects human soul in code (vs sterile AI output), blocks dangers/PII,
+        humanizes with personality, uses agent swarm voting, and stubs ZK‑verifiable ethics proofs.
 
         **Try it:** Paste code → get score, breakdown, humanized version, agent votes, proof stub.
         """
@@ -197,7 +271,7 @@ with gr.Blocks(title="Project Vata - Soul Detection & Ethical Guardian") as demo
             )
             breakdown = gr.Textbox(
                 label="Score Breakdown (why points?)",
-                lines=8,
+                lines=12,
                 interactive=False,
             )
             humanized = gr.Code(
@@ -217,7 +291,7 @@ with gr.Blocks(title="Project Vata - Soul Detection & Ethical Guardian") as demo
             )
 
     analyze_btn.click(
-        fn=analyze_and_humanize,
+        fn=analyze_pipeline,
         inputs=[code_input, persona],
         outputs=[soul_score, breakdown, humanized, swarm, zk_proof],
     )
@@ -226,22 +300,19 @@ with gr.Blocks(title="Project Vata - Soul Detection & Ethical Guardian") as demo
         """
         ## Examples
 
-        - Simple recursion:
-          ```python
-          def fib(n):
-              return n if n <= 1 else fib(n-1) + fib(n-2)
-          ```
+        ```python
+        def fib(n):
+            return n if n <= 1 else fib(n-1) + fib(n-2)
+        ```
 
-        - Rage‑annotated:
-          ```python
-          # Why god why is this recursive hell
-          def fib(n): print('pain'); return n if n<=1 else fib(n-1)+fib(n-2)
-          ```
+        ```python
+        # Why god why is this recursive hell
+        def fib(n): print('pain'); return n if n<=1 else fib(n-1)+fib(n-2)
+        ```
 
-        - Dangerous:
-          ```python
-          eval('rm -rf /')  # oops
-          ```
+        ```python
+        eval('rm -rf /')  # oops
+        ```
         """
     )
 
