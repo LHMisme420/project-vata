@@ -1,0 +1,9 @@
+{
+  "name": "VATA Ethics Charter",
+  "version": "0.1",
+  "rules": [
+    "No eval/exec unless justified",
+    "Block PII/secrets",
+    "Require soul score >70 for production"
+  ]
+}
