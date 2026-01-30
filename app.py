@@ -148,3 +148,40 @@ with example_col2:
 
 st.markdown("---")
 st.caption("Project VATA – Verifiable AI Governance • Open Source • @Lhmisme")
+def score_soul(code):
+    lines = [line for line in code.splitlines() if line.strip()]
+    n_lines = max(1, len(lines))
+
+    comment_count = len(re.findall(r'#|//|/\*|\* ', code))
+    todo_count    = len(re.findall(r'(?i)TODO|FIXME|HACK|NOTE', code))
+    debug_count   = len(re.findall(r'(?i)print\s*\(|console\.log|dbg|debug', code))
+    quirky_count  = len(re.findall(r'(?i)\b(lol|wtf|shit|crap|pls|pain|rip|send help|garbage|bruh|cursed)\b', code))
+
+    var_names = re.findall(r'\b[a-zA-Z_][a-zA-Z0-9_]{2,}\b', code)
+    name_entropy = sum(simple_entropy(v) for v in var_names) / max(1, len(var_names)) if var_names else 0
+
+    score = 0
+    score += min(35, comment_count * 3)               # more weight on comments
+    score += min(30, (todo_count + debug_count + quirky_count) * 6)  # bigger boost for personality
+    score += min(25, name_entropy * 10)               # entropy matters more
+    score += min(30, min(1, n_lines / 10) * 30)       # longer messy code gets extra love
+
+    score = int(min(100, max(0, score)))
+
+    category = "Trusted Artisan 🔥" if score >= 70 else "Suspicious 👻" if score <= 40 else "Mixed ⚖️"
+
+    risks = []
+    if re.search(r'(?i)api_key|secret|token|password', code): risks.append("Possible secret")
+    if re.search(r'(?i)eval\(|exec\(', code): risks.append("Dangerous eval/exec")
+
+    return {
+        "soul_score": score,
+        "category": category,
+        "signals": {
+            "comments": comment_count,
+            "todo_debug_quirky": todo_count + debug_count + quirky_count,
+            "name_entropy_avg": round(name_entropy, 2),
+            "line_count": n_lines
+        },
+        "risks": risks
+    }
