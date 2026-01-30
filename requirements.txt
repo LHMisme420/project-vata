@@ -4,5 +4,5 @@ gradio==6.3.0
 torch
 transformers
 numpy
-
+sentence-transformers
 onnx
