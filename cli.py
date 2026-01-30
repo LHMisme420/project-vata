@@ -252,3 +252,5 @@ def analyze_folder(path):
         code = file.read_text(errors="ignore")
         print(f"\n--- Analyzing {file} ---")
         run_analysis(code, persona="default")
+from vata.version import VERSION
+print("VATA Version:", VERSION)
