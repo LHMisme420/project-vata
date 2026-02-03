@@ -1,0 +1,12 @@
+## Security & Audit Status
+
+- Tool: SolidityScan
+- Methodology: Static Analysis
+- Language: Solidity
+- Security Score: **95.61 / 100 (GREAT)**
+- Critical Issues: 0
+- High Issues: 0
+- Medium Issues: 0
+
+This project passed static security analysis with no blocking issues.
+The contract is minimal by design and intended as a reference / proof deployment.
