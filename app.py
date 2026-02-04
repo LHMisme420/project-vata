@@ -159,6 +159,14 @@ def swarm_votes(score: int) -> str:
         verdict = "Mixed but leaning Synthetic"
     else:
         verdict = "Strongly Synthetic‑leaning"
+if risky > 0:
+    verdict = "VATA REJECTED (Violations)"
+elif score > 70:
+    verdict = "VATA COMPLIANT"
+elif score > 40:
+    verdict = "VATA REVIEW NEEDED"
+else:
+    verdict = "VATA REJECTED"
 
     votes = textwrap.dedent(f"""
     Swarm Agent Votes (stub):
