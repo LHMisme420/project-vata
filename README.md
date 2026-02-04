@@ -1,3 +1,12 @@
+VATA Soul Check
+
+Public demo for heuristic-based code integrity scoring and zero-knowledge
+experimentation. Includes ZK Groth16 proof pipelines and on-chain verification
+experiments.
+
+Live Demo: https://huggingface.co/spaces/Lhmisme/vata-soul-check
+
+
 # VATA — Visual Authorship & Transparency Analyzer  
 Soul Scoring • Ethics Detection • Humanization • Fingerprinting • ZK‑Proof Stubs  
 VATA is a multi‑dimensional code analysis engine designed to evaluate authorship signals, ethical risk, fairness and bias, human‑likeness, stylistic fingerprinting, explainability, and zero‑knowledge proof stubs. It runs fully offline, locally, and deterministically, providing a transparent and auditable analysis pipeline for developers, researchers, and compliance environments.
