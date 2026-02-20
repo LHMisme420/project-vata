@@ -1,0 +1,16 @@
+VATA Protocol v2 — L2 Proof Verification Receipt (Arbitrum Sepolia)
+
+Date: 2026-02-20
+Network: Arbitrum Sepolia
+RPC: https://sepolia-rollup.arbitrum.io/rpc
+
+Correct Groth16 Verifier (deployed): 0x2e2Cf63423e3c4F58cEb69238e8ed503226c0d83
+Deploy TX: 0x16286baac9e5cd4a14d30a29e0b35e94943727d06581788db0ab323cd5548269
+
+Batch Dir:
+merkle\batches\claim_20260220_023031
+
+Proof verified on-chain via cast:
+verifyProof(uint256[2],uint256[2][2],uint256[2],uint256[1]) => true
+
+Status: PASS ✅
