@@ -1,16 +1,52 @@
-<!doctype html>
+﻿<!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>VATA — L2 Proof Verifier</title>
+  <meta charset="utf-8">
+  <title>Project VATA — Dual L2 Proof Verification</title>
 </head>
 <body>
-  <h2>VATA UI is running ✅</h2>
-  <p>Try endpoints:</p>
-  <ul>
-    <li><a href="/api/env">/api/env</a></li>
-    <li><a href="/api/latest-batch">/api/latest-batch</a></li>
-  </ul>
+
+<h1>Project VATA — Dual L2 Proof Verification</h1>
+
+<button onclick="checkEnv()">Check env</button>
+<pre id="env"></pre>
+
+<hr/>
+
+<button onclick="useLatest()">Use latest</button>
+<input id="batch" style="width:600px"/>
+
+<hr/>
+
+<button onclick="verifyAll()">Verify ALL</button>
+
+<pre id="out"></pre>
+
+<script>
+async function checkEnv(){
+  const r = await fetch("/api/env");
+  env.textContent = JSON.stringify(await r.json(),null,2);
+}
+
+async function useLatest(){
+  const r = await fetch("/latest");
+  const j = await r.json();
+  batch.value = j.latest;
+}
+
+async function verifyAll(){
+  const r = await fetch("/api/share",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      batchDir:batch.value,
+      arbResult:true,
+      opResult:true
+    })
+  });
+  out.textContent = JSON.stringify(await r.json(),null,2);
+}
+</script>
+
 </body>
 </html>
