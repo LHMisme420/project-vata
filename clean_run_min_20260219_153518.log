@@ -1,0 +1,211 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20260219153518
+Username: LHM\lhmsi
+RunAs User: LHM\lhmsi
+Configuration Name: 
+Machine: LHM (Microsoft Windows NT 10.0.19045.0)
+Host Application: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+Process ID: 2584
+PSVersion: 5.1.19041.6456
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.19041.6456
+BuildVersion: 10.0.19041.6456
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+PS [lhmsi @ LHM] > try {
+
+  Step "Environment"
+  Pause
+  "RPC   = $RPC"
+  "CHAIN = " + (cast chain-id --rpc-url $RPC)
+  "REG   = $REG"
+
+  Step "Signer"
+  Pause
+  $ME = cast wallet address --private-key $PK
+  if (-not $ME) { throw "Could not derive wallet from PK" }
+  "ME    = $ME"
+
+  Step "Contract Code Exists"
+  Pause
+  $code = cast code $REG --rpc-url $RPC
+  if ($code -eq "0x") { throw "No code at REG on this RPC" }
+  "BYTECODE LENGTH = $($code.Length)"
+
+  Step "Roots To Anchor"
+  Pause
+  $ROOTS
+
+  foreach ($R in $ROOTS) {
+
+    Step "Check isRoot BEFORE ($R)"
+    Pause
+    $before = IsRoot $REG $R $RPC
+    "isRoot BEFORE = $before"
+
+    if ($before -eq "true") {
+      "SKIP (already true) – choose new roots"
+      continue
+    }
+
+    Step "Anchor Root ($R)"
+    Pause
+    $TX = SendAnchor $REG $R $RPC $PK
+    "TX = $TX"
+
+    Step "Receipt"
+    Pause
+    ShortReceipt $TX $RPC | Format-List
+
+    Step "Verify AFTER ($R)"
+    Pause
+    $after = IsRoot $REG $R $RPC
+    "isRoot AFTER  = $after"
+    if ($after -ne "true") { throw "Verification failed: isRoot did not become true" }
+  }
+
+  Step "Done"
+  Pause
+  "All roots verified true."
+
+  Step "Log Saved"
+  $log
+}
+finally {
+  Stop-Transcript | Out-Null
+}
+
+============================================================
+STEP: Environment
+============================================================
+RPC   = https://sepolia.optimism.io
+CHAIN = 11155420
+REG   = 0xdE91c6E5606A99A072ab335C1798E2551cE5de14
+
+============================================================
+STEP: Signer
+============================================================
+ME    = 0x48AC6F39864Aa17e4f1D964eA72DbE74bDF09c2C
+
+============================================================
+STEP: Contract Code Exists
+============================================================
+BYTECODE LENGTH = 566
+
+============================================================
+STEP: Roots To Anchor
+============================================================
+1771515319
+1771515320
+1771515321
+
+============================================================
+STEP: Check isRoot BEFORE (1771515319)
+============================================================
+isRoot BEFORE = false
+
+============================================================
+STEP: Anchor Root (1771515319)
+============================================================
+TX = 0x15c494ba70db85575f85a87d078f6bbbf3bf5f48f4ae564d26322dc1933b1054
+
+============================================================
+STEP: Receipt
+============================================================
+
+
+txHash  : 0x15c494ba70db85575f85a87d078f6bbbf3bf5f48f4ae564d26322dc1933b1054
+status  : 0x1
+block   : 0x2604c35
+gasUsed : 0xb021
+logs    : 1
+to      : 0xde91c6e5606a99a072ab335c1798e2551ce5de14
+from    : 0x48ac6f39864aa17e4f1d964ea72dbe74bdf09c2c
+
+
+
+
+============================================================
+STEP: Verify AFTER (1771515319)
+============================================================
+isRoot AFTER  = true
+
+============================================================
+STEP: Check isRoot BEFORE (1771515320)
+============================================================
+isRoot BEFORE = false
+
+============================================================
+STEP: Anchor Root (1771515320)
+============================================================
+TX = 0xa1b75f2231a2d71bba5306d90a633d7602cffa220e68d1c50dc3e03f0ad0bc53
+
+============================================================
+STEP: Receipt
+============================================================
+
+
+txHash  : 0xa1b75f2231a2d71bba5306d90a633d7602cffa220e68d1c50dc3e03f0ad0bc53
+status  : 0x1
+block   : 0x2604c3a
+gasUsed : 0xb021
+logs    : 1
+to      : 0xde91c6e5606a99a072ab335c1798e2551ce5de14
+from    : 0x48ac6f39864aa17e4f1d964ea72dbe74bdf09c2c
+
+
+
+
+============================================================
+STEP: Verify AFTER (1771515320)
+============================================================
+isRoot AFTER  = true
+
+============================================================
+STEP: Check isRoot BEFORE (1771515321)
+============================================================
+isRoot BEFORE = false
+
+============================================================
+STEP: Anchor Root (1771515321)
+============================================================
+TX = 0x3dc2d924a588f24fed280aac1eee37d434d6de817303688394777601b52c152c
+
+============================================================
+STEP: Receipt
+============================================================
+
+
+txHash  : 0x3dc2d924a588f24fed280aac1eee37d434d6de817303688394777601b52c152c
+status  : 0x1
+block   : 0x2604c3f
+gasUsed : 0xb021
+logs    : 1
+to      : 0xde91c6e5606a99a072ab335c1798e2551ce5de14
+from    : 0x48ac6f39864aa17e4f1d964ea72dbe74bdf09c2c
+
+
+
+
+============================================================
+STEP: Verify AFTER (1771515321)
+============================================================
+isRoot AFTER  = true
+
+============================================================
+STEP: Done
+============================================================
+All roots verified true.
+
+============================================================
+STEP: Log Saved
+============================================================
+clean_run_min_20260219_153518.log
+**********************
+Windows PowerShell transcript end
+End time: 20260219153601
+**********************

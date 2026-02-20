@@ -1,7 +1,7 @@
-
+﻿
 pragma circom 2.1.0;
 
-include "circomlib/comparators.circom"; // Download circomlib: https://github.com/iden3/circomlib
+include "circomlib/circuits/comparators.circom"; // Download circomlib: https://github.com/iden3/circomlib
 
 template ActionVerifier() {
     signal input actionScore; // Agent's action impact (e.g., 0-100)
@@ -22,3 +22,5 @@ component main {public [ethicsThreshold]} = ActionVerifier();
     "actionScore": "5",
     "ethicsThreshold": "10"
 } */
+
+
