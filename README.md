@@ -1,4 +1,21 @@
 VATA Soul Check
+## End-to-End L2 Proof Verification (PASS)
+
+This repo verifies the same Groth16 proof on two L2 testnets.
+
+### Arbitrum Sepolia
+- Verifier: `0x2e2Cf63423e3c4F58cEb69238e8ed503226c0d83`
+- Deploy TX: `0x16286baac9e5cd4a14d30a29e0b35e94943727d06581788db0ab323cd5548269`
+
+### Optimism Sepolia
+- Verifier: `0x346D202372fbb9020FC2308a688c58584bF4280F`
+- Deploy TX: `0x5cbff5655ac4f908f4072167e83cf769f4b008f7c707fc015c38156a8dfe618d`
+
+### Reproduce
+Set env vars (PowerShell):
+```powershell
+$env:ARB_VERIFIER="0x2e2Cf63423e3c4F58cEb69238e8ed503226c0d83"
+$env:OP_VERIFIER ="0x346D202372fbb9020FC2308a688c58584bF4280F"
 
 Public demo for heuristic-based code integrity scoring and zero-knowledge
 experimentation. Includes ZK Groth16 proof pipelines and on-chain verification
