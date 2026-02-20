@@ -1,0 +1,16 @@
+VATA Protocol v2 — L2 Proof Verification Receipt (Optimism Sepolia)
+
+Date: 2026-02-20
+Network: Optimism Sepolia
+RPC: https://sepolia.optimism.io
+
+Groth16 Verifier (deployed): 0x346D202372fbb9020FC2308a688c58584bF4280F
+Deploy TX: 0x5cbff5655ac4f908f4072167e83cf769f4b008f7c707fc015c38156a8dfe618d
+
+Batch Dir:
+merkle\batches\claim_20260220_023031
+
+Proof verified on-chain via cast:
+verifyProof(uint256[2],uint256[2][2],uint256[2],uint256[1]) => true
+
+Status: PASS ✅
