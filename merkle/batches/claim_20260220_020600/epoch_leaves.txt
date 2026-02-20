@@ -1,0 +1,31 @@
+
+@'
+Write-Host "Script is running"
+
+# Read leaves
+$leaves = Get-Content -Path "epoch_leaves.txt" | Where-Object { $_.Trim() -ne "" }
+
+function Hash-Hex([string]$hex) {
+    $bytes = for ($i = 0; $i -lt $hex.Length; $i += 2) {
+        [Convert]::ToByte($hex.Substring($i, 2), 16)
+    }
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    ($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString("x2") }) -join ""
+}
+
+function Merkle([string[]]$layer) {
+    while ($layer.Count -gt 1) {
+        $next = @()
+        for ($i = 0; $i -lt $layer.Count; $i += 2) {
+            $a = $layer[$i]
+            $b = if ($i + 1 -lt $layer.Count) { $layer[$i+1] } else { $layer[$i] }
+            $next += Hash-Hex ($a + $b)
+        }
+        $layer = $next
+    }
+    return $layer[0]
+}
+
+$root = Merkle $leaves
+Write-Host "Computed root: $root"
+'@ | Set-Content verify_epoch.ps1

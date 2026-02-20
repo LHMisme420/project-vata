@@ -1,0 +1,20 @@
+﻿{
+    "version":  "vata-receipt-1",
+    "circuit":  "action_verifier",
+    "inputs":  {
+                   "actionScore":  "4",
+                   "ethicsThreshold":  "10"
+               },
+    "publicSignals":  {
+                          "value":  [
+                                        "1",
+                                        "10"
+                                    ],
+                          "Count":  2
+                      },
+    "proofHash":  "0xf44e6cd432054bc2a8a590e7f64f1cb6065b07a6242e68e86e2b4731b2310b30",
+    "verifier":  "0xB6e73977912427552A4166933537C1796cd152F9",
+    "chainId":  11155111,
+    "verifyResult":  true,
+    "timestamp":  1771528504
+}

@@ -1,0 +1,7 @@
+﻿{
+  "file": ".\epoch_leaves.txt",
+  "sha256": "0x2c7ee357520ec786f741a77fa90881620735301d751c791a79c01816e3ebfac8",
+  "contract": "0xC48A65E83999117c0F169b9d12120c172d3cE4e3",
+  "rpc": "https://ethereum-sepolia-rpc.publicnode.com",
+  "bondWei": "1000000000000000"
+}

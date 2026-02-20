@@ -1,0 +1,22 @@
+﻿{
+    "version":  "vata-merkle-1",
+    "hash":  "sha256",
+    "leafHash":  "sha256(file)",
+    "leafOrder":  "sorted_by_filename",
+    "receiptDir":  "receipts",
+    "leafCount":  2,
+    "root":  "0xd527673ea327dfdbdbf6933f76c651f7a7ec602a0b15f32f3422ea67b1c94532",
+    "levels":  [
+                   [
+                       "c06284741c03691cc2cee1983410222d178030163c5f8df178e9d662ec0fa165",
+                       "c06284741c03691cc2cee1983410222d178030163c5f8df178e9d662ec0fa165"
+                   ],
+                   [
+                       "d527673ea327dfdbdbf6933f76c651f7a7ec602a0b15f32f3422ea67b1c94532"
+                   ]
+               ],
+    "files":  [
+                  "receipt.json",
+                  "receipt_0002.json"
+              ]
+}

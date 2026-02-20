@@ -1,0 +1,19 @@
+VATA L2 Proof Verification Receipt (Arbitrum Sepolia)
+
+Date: 2026-02-20
+Network: Arbitrum Sepolia
+RPC: https://sepolia-rollup.arbitrum.io/rpc
+
+Verifier (old, mismatched): 0x3321031117b4028E4BD799b380Fc7f103253B62D
+Verifier (correct, deployed): 0x2e2Cf63423e3c4F58cEb69238e8ed503226c0d83
+Deploy TX: 0x16286baac9e5cd4a14d30a29e0b35e94943727d06581788db0ab323cd5548269
+
+Claim Batch:
+C:\Users\lhmsi\Desktop\project-vata\merkle\batches\claim_20260220_023031
+
+Proof:  proof.json
+Public: public.json
+PUB_LEN: 1
+
+cast call verifyProof(...) RESULT: true
+Status: PASS
