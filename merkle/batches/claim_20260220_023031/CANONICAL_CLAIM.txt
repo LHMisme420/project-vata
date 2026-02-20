@@ -1,0 +1,16 @@
+Canonical Example Claim
+
+This claim folder contains a Groth16 proof and public signals that:
+
+- Verifies on Arbitrum Sepolia
+- Verifies on Optimism Sepolia
+
+Reproduce from repo root:
+
+$env:ARB_VERIFIER="0x2e2Cf63423e3c4F58cEb69238e8ed503226c0d83"
+$env:OP_VERIFIER ="0x346D202372fbb9020FC2308a688c58584bF4280F"
+
+$B = ".\merkle\batches\claim_20260220_023031"
+.\scripts\l2_verify_all.ps1 -BatchDir $B
+
+Expected: ALL PASS
