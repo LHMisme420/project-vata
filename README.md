@@ -28,4 +28,40 @@ If both return `true`, the proof is mathematically valid and cross-chain consist
 ---
 
 ## Architecture
+proof.json + public.json
+│
+▼
+PowerShell verification scripts
+│
+▼
+cast call verifyProof(...)
+│
+├─ Arbitrum Sepolia
+└─ Optimism Sepolia
+│
+▼
+Unified PASS / FAIL
+│
+▼
+Cryptographic Receipt (Markdown)
+
+---
+
+## Quick Start
+
+### Requirements
+
+- Windows  
+- Node.js  
+- Foundry (cast)  
+- PowerShell  
+
+---
+
+### Install Foundry
+
+```powershell
+winget install Foundry
+
+Restart terminal after install.
 
